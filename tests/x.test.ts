@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractProductUrl } from "../worker/lib/urls";
 import {
+  expandXSyndicationText,
   extractXMentionsFromFxTwitter,
   extractXMentionsFromSyndication,
   fetchVideoMetadata,
   fxTwitterHasVideo,
+  isXMediaExpandedUrl,
   oembedHtmlHasVideo,
   parseFxTwitterResponse,
   parseXOembedHtml,
@@ -78,6 +80,34 @@ const FX_VIDEO_FIXTURE = {
   },
 };
 
+const MARTIN_TWEET_ID = "2092960249145676155";
+const MARTIN_SYNDICATION_FIXTURE = {
+  id_str: MARTIN_TWEET_ID,
+  text: "What’s  https://t.co/w8Pt7wUHo8 why it exist ?\n\nWell I made a video to tell you ! https://t.co/mRsYlSDcrW",
+  created_at: "Wed Aug 27 12:00:00 +0000 2026",
+  user: { screen_name: "martindonadieu", name: "Martin Donadieu" },
+  entities: {
+    urls: [
+      {
+        display_url: "videoclub.lol",
+        expanded_url: "https://videoclub.lol",
+        url: "https://t.co/w8Pt7wUHo8",
+      },
+      {
+        display_url: "pic.x.com/video/1",
+        expanded_url: "https://pic.x.com/mRsYlSDcrW",
+        url: "https://t.co/mRsYlSDcrW",
+      },
+    ],
+  },
+  mediaDetails: [
+    {
+      type: "video",
+      media_url_https: "https://pbs.twimg.com/amplify_video_thumb/2092960249145676155/img/poster.jpg",
+    },
+  ],
+};
+
 describe("X video metadata helpers", () => {
   it("computes syndication token from tweet id", () => {
     expect(xSyndicationToken("1234567890123456789")).toMatch(/^[a-z0-9]+$/);
@@ -123,6 +153,58 @@ describe("X video metadata helpers", () => {
     const parsed = parseFxTwitterResponse(FX_VIDEO_FIXTURE);
     expect(extractProductUrl(parsed.description)).toBe("https://capgo.app");
     expect(parsed.platformAccount).toBe("capgoapp");
+  });
+
+  it("expands t.co product links from syndication entities.urls", () => {
+    expect(tweetHasVideo(MARTIN_SYNDICATION_FIXTURE)).toBe(true);
+    expect(isXMediaExpandedUrl("https://pic.x.com/mRsYlSDcrW")).toBe(true);
+    expect(isXMediaExpandedUrl("https://videoclub.lol")).toBe(false);
+
+    const expanded = expandXSyndicationText(MARTIN_SYNDICATION_FIXTURE);
+    expect(expanded).toContain("https://videoclub.lol");
+    expect(expanded).not.toContain("t.co/w8Pt7wUHo8");
+    expect(expanded).toContain("https://t.co/mRsYlSDcrW");
+
+    const parsed = parseXSyndicationResponse(MARTIN_SYNDICATION_FIXTURE);
+    expect(parsed.description).toContain("https://videoclub.lol");
+    expect(extractProductUrl(parsed.description)).toBe("https://videoclub.lol");
+  });
+
+  it("resolves videoclub.lol from syndication entities even when description still has t.co", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 404 })),
+    );
+
+    const productUrl = await resolveXProductUrl(
+      MARTIN_SYNDICATION_FIXTURE.text,
+      "martindonadieu",
+      {},
+      { syndication: MARTIN_SYNDICATION_FIXTURE },
+    );
+    expect(productUrl).toBe("https://videoclub.lol");
+  });
+
+  it("does not treat media-only t.co as a product URL", async () => {
+    const mediaOnlyFixture = {
+      text: "Watch this clip https://t.co/A8f7HL18ea",
+      user: { screen_name: "founder" },
+      entities: {
+        urls: [{ url: "https://t.co/A8f7HL18ea", expanded_url: "https://pic.x.com/A8f7HL18ea" }],
+      },
+      mediaDetails: [{ type: "video", media_url_https: "https://pbs.twimg.com/media/poster.jpg" }],
+    };
+
+    const parsed = parseXSyndicationResponse(mediaOnlyFixture);
+    expect(extractProductUrl(parsed.description)).toBeNull();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}", { status: 404 })),
+    );
+
+    const productUrl = await resolveXProductUrl(parsed.description, "founder", {}, { syndication: mediaOnlyFixture });
+    expect(productUrl).toBeNull();
   });
 
   it("does not extract product URL from Jesse tweet text with only @Bento and t.co media", () => {
@@ -215,6 +297,30 @@ describe("fetchVideoMetadata X fallback ladder", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("resolves Martin tweet with t.co product link via syndication entities", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("cdn.syndication.twimg.com")) {
+          return new Response(JSON.stringify(MARTIN_SYNDICATION_FIXTURE), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response("{}", { status: 404 });
+      }),
+    );
+
+    const metadata = await fetchVideoMetadata(
+      `https://x.com/martindonadieu/status/${MARTIN_TWEET_ID}?s=46`,
+    );
+    expect(metadata.videoId).toBe(MARTIN_TWEET_ID);
+    expect(metadata.productUrl).toBe("https://videoclub.lol");
+    expect(extractProductUrl(metadata.description)).toBe("https://videoclub.lol");
+    expect(metadata.platformAccount).toBe("martindonadieu");
   });
 
   it("falls back to fxtwitter when syndication is blocked", async () => {

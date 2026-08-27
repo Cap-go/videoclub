@@ -16,6 +16,8 @@ const BLOCKED_HOSTS = new Set([
   "www.twitter.com",
   "mobile.twitter.com",
   "t.co",
+  "pic.x.com",
+  "pic.twitter.com",
 ]);
 
 const X_HOSTS = new Set(["x.com", "twitter.com", "mobile.x.com", "mobile.twitter.com"]);
