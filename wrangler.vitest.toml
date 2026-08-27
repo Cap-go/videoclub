@@ -1,0 +1,14 @@
+name = "videoclub"
+main = "worker/index.ts"
+compatibility_date = "2026-08-27"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "videoclub-db"
+database_id = "e0797cb5-25d1-462f-a9bd-aa2c236a3209"
+migrations_dir = "migrations"
+
+[vars]
+APP_URL = "http://localhost:5173"
+EMAIL_FROM = "Video Club <hello@videoclub.lol>"

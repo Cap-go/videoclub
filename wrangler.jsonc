@@ -1,0 +1,52 @@
+{
+  "name": "videoclub",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "videoclub-db",
+      "database_id": "e0797cb5-25d1-462f-a9bd-aa2c236a3209",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": {
+    "APP_URL": "http://localhost:5173",
+    "EMAIL_FROM": "Video Club <hello@videoclub.lol>"
+  },
+  "env": {
+    "production": {
+      "vars": {
+        "APP_URL": "https://videoclub.lol",
+        "EMAIL_FROM": "Video Club <hello@videoclub.lol>"
+      },
+      "routes": [
+        {
+          "pattern": "videoclub.lol",
+          "custom_domain": true
+        },
+        {
+          "pattern": "www.videoclub.lol",
+          "custom_domain": true
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "videoclub-db",
+          "database_id": "e0797cb5-25d1-462f-a9bd-aa2c236a3209",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  }
+}
