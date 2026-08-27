@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
-import { faviconUrl, type ChallengeReason, type LeaderboardEntry, type StartupVideo } from "../lib/api";
+import { type ChallengeReason, type LeaderboardEntry, type StartupVideo } from "../lib/api";
 import { formatDate, platformLabel, timeAgo } from "../lib/format";
 import { ChallengeControl } from "./ChallengeControl";
+import { ProductDomainLink } from "./ProductDomainLink";
+import { StartupLogo } from "./StartupLogo";
 
 interface RankCardProps {
   entry: LeaderboardEntry;
@@ -40,31 +42,25 @@ export function RankCard({
           #{entry.rank}
         </span>
 
-        <img
-          src={faviconUrl(entry.product_host)}
-          alt=""
+        <StartupLogo
+          host={entry.product_host}
           className="mt-0.5 h-11 w-11 shrink-0 rounded-xl border border-[#e8e4df] bg-white object-cover sm:h-12 sm:w-12"
-          loading="lazy"
         />
 
         <div className="min-w-0 flex-1">
-          <a
-            href={entry.product_url}
-            target="_blank"
-            rel="noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="block truncate text-base font-bold text-[#111] hover:text-[#f4623a] sm:text-lg"
-          >
-            {entry.name}
-          </a>
+          <span className="block truncate text-base font-bold text-[#111] sm:text-lg">{entry.name}</span>
           <p className="mt-0.5 line-clamp-2 text-sm text-[#6b7280]">
             {entry.video_count} founder video{entry.video_count === 1 ? "" : "s"} about{" "}
-            {entry.product_host}
+            <ProductDomainLink href={entry.product_url} host={entry.product_host} />
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#9ca3af]">
             <span>{timeAgo(entry.first_video_at)}</span>
             <span>·</span>
-            <span>{entry.product_host}</span>
+            <ProductDomainLink
+              href={entry.product_url}
+              host={entry.product_host}
+              className="text-xs font-medium text-[#f4623a] underline underline-offset-2 decoration-[#f4623a]/70 hover:decoration-[#f4623a]"
+            />
             {claimTarget && entry.rank === 1 && (
               <>
                 <span>·</span>
