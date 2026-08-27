@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: dark;
-  --accent: #ff3333;
-  --bg: #050505;
-  --surface: #111111;
-  --border: #222222;
-  --muted: #888888;
+  color-scheme: light;
+  --accent: #f4623a;
+  --accent-soft: #fff4f0;
+  --accent-border: #fcd4c4;
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --text: #111111;
+  --muted: #6b7280;
+  --border: #e8e4df;
+  --border-soft: #f0ece7;
 }
 
 * {
@@ -22,8 +26,9 @@ body,
 body {
   margin: 0;
   background: var(--bg);
-  color: #f5f5f5;
+  color: var(--text);
   font-family:
+    Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -46,5 +51,5 @@ button {
 
 ::selection {
   background: var(--accent);
-  color: #000;
+  color: #fff;
 }

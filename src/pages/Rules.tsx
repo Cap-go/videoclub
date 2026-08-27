@@ -1,61 +1,58 @@
 export function Rules() {
   return (
-    <article className="prose prose-invert max-w-none space-y-8">
-      <h1 className="text-4xl font-black sm:text-5xl">Rules</h1>
-      <p className="text-lg text-[#aaa]">Blunt version. Read it.</p>
+    <article className="mx-auto max-w-2xl space-y-10">
+      <header className="space-y-3">
+        <h1 className="text-4xl font-bold tracking-tight text-[#111] sm:text-5xl">Rules</h1>
+        <p className="text-lg text-[#6b7280]">Blunt version. Read it once.</p>
+      </header>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#ff3333]">1. Paste a video URL</h2>
-        <p className="text-[#ccc]">
-          YouTube, TikTok, or Instagram Reels/posts. That&apos;s it. No accounts. No login. No pitch deck upload.
+        <h2 className="text-xl font-bold text-[#111]">How ranking works</h2>
+        <p className="leading-relaxed text-[#374151]">
+          <strong>Rank is the videos — nothing else.</strong> More valid founder videos about your product =
+          higher rank. Tie-break: whoever posted their first video earlier keeps the higher spot.
+        </p>
+        <p className="leading-relaxed text-[#374151]">
+          Out-publish everyone to rank #1 — that&apos;s it. Posting fewer than #1 still puts you on the board
+          at whatever place that count can take.
         </p>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#ff3333]">2. Product link in the description</h2>
-        <p className="text-[#ccc]">
-          We read the video description. It must contain a real product URL — http/https that is{" "}
-          <strong>not</strong> YouTube, TikTok, or Instagram. That URL attributes the video to your startup.
-          No product link? Rejected.
+        <h2 className="text-xl font-bold text-[#111]">What you can post</h2>
+        <ul className="list-disc space-y-2 pl-5 leading-relaxed text-[#374151]">
+          <li>YouTube, TikTok, or Instagram video URLs only</li>
+          <li>Founder on camera — human, not AI slop</li>
+          <li>Product URL in the video description (not YouTube/TikTok/Instagram links)</li>
+        </ul>
+        <p className="leading-relaxed text-[#374151]">
+          No product link in the description? Rejected. We can&apos;t read the description? Rejected.
         </p>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#ff3333]">3. Real founder on camera</h2>
-        <p className="text-[#ccc]">
-          Human founder. Not AI slop. We can&apos;t detect AI perfectly. Honor system + community reports.
+        <h2 className="text-xl font-bold text-[#111]">Email</h2>
+        <p className="leading-relaxed text-[#374151]">
+          First time a new startup (product domain) hits the board, we need your email. More videos for the
+          same startup? No email again.
         </p>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#ff3333]">4. Email once per startup</h2>
-        <p className="text-[#ccc]">
-          First video for a new product domain? We need your email. More videos for the same startup? No email
-          again.
+        <h2 className="text-xl font-bold text-[#111]">Reports</h2>
+        <p className="leading-relaxed text-[#374151]">
+          Anyone can report a video as AI. <strong>One report removes that video and the entire startup</strong>{" "}
+          from the board. The founder gets emailed why.
         </p>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#ff3333]">5. Rank = video count</h2>
-        <p className="text-[#ccc]">
-          More valid founder videos = higher rank. Tie-break: whoever posted their first video earlier wins the
-          higher spot.
+        <h2 className="text-xl font-bold text-[#111]">After you post</h2>
+        <p className="leading-relaxed text-[#374151]">
+          Rank changes? You get an email. First time on the board? Welcome email with your rank. Removed?
+          Email with the reported video.
         </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#ff3333]">6. One AI report nukes the startup</h2>
-        <p className="text-[#ccc]">
-          Anyone can report a video as AI. One report removes that video <em>and</em> removes the entire startup
-          from the board. The founder gets emailed.
-        </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#ff3333]">7. Rank changes = email</h2>
-        <p className="text-[#ccc]">
-          New video moves you up or down? Email. Someone gets removed and everyone shifts? Email.
-        </p>
+        <p className="leading-relaxed text-[#374151]">No ads. No API keys. No login.</p>
       </section>
     </article>
   );

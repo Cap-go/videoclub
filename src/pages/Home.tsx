@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { LivePill } from "../components/LivePill";
+import { RankCard } from "../components/RankCard";
 import {
   checkVideo,
-  faviconUrl,
   getLeaderboard,
   getStartupVideos,
   reportVideo,
@@ -9,13 +10,6 @@ import {
   type LeaderboardEntry,
   type StartupVideo,
 } from "../lib/api";
-
-function platformLabel(platform: string) {
-  if (platform === "youtube") return "YouTube";
-  if (platform === "tiktok") return "TikTok";
-  if (platform === "instagram") return "Instagram";
-  return platform;
-}
 
 export function Home() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -48,6 +42,13 @@ export function Home() {
   useEffect(() => {
     void loadBoard();
   }, [loadBoard]);
+
+  const totalVideos = useMemo(
+    () => entries.reduce((sum, entry) => sum + entry.video_count, 0),
+    [entries],
+  );
+
+  const claimTarget = entries[0]?.video_count ? entries[0].video_count + 1 : 1;
 
   const toggleRow = async (entry: LeaderboardEntry) => {
     if (expandedId === entry.id) {
@@ -101,7 +102,7 @@ export function Home() {
     try {
       const result = await submitVideo(videoUrl.trim(), email.trim() || undefined);
       setFormSuccess(
-        `Added "${result.video.title}" — ${result.startup.name} is now #${result.startup.rank}`,
+        `Posted "${result.video.title}" — ${result.startup.name} is now #${result.startup.rank}`,
       );
       setVideoUrl("");
       setEmail("");
@@ -118,7 +119,11 @@ export function Home() {
   };
 
   const handleReport = async (videoId: number) => {
-    if (!confirm("Report this video as AI? This removes the video AND the entire startup from the board.")) {
+    if (
+      !confirm(
+        "Report this video as AI? One report removes the video and the entire startup from the board.",
+      )
+    ) {
       return;
     }
     try {
@@ -132,179 +137,130 @@ export function Home() {
   };
 
   return (
-    <div className="space-y-12">
-      <section className="space-y-4">
-        <p className="text-sm uppercase tracking-[0.2em] text-[#ff3333]">Public leaderboard</p>
-        <h1 className="text-5xl font-black leading-none tracking-tight sm:text-7xl">Video Club</h1>
-        <p className="max-w-xl text-lg text-[#aaa] sm:text-xl">
-          Rank is the videos. Real founder. Real product link. No AI.
+    <div className="space-y-10">
+      <LivePill startupCount={entries.length} videoCount={totalVideos} />
+
+      <section className="mx-auto max-w-4xl space-y-4 pt-2 text-center">
+        <h1 className="text-4xl font-bold leading-tight tracking-tight text-[#111] sm:text-5xl md:text-6xl">
+          Claim #1 with{" "}
+          <span className="text-[#f4623a]">{claimTarget} video{claimTarget === 1 ? "" : "s"}</span>
+        </h1>
+        <p className="mx-auto max-w-2xl text-base text-[#6b7280] sm:text-lg">
+          Out-publish everyone to rank #1 — that&apos;s it. Posting fewer than #1 still puts you on the board
+          at whatever place that count can take.
         </p>
+        <p className="text-sm text-[#9ca3af]">No ads. No API keys. No login.</p>
       </section>
 
-      <section className="rounded-2xl border border-[#222] bg-[#111] p-5 sm:p-6">
-        <h2 className="mb-4 text-xl font-bold">Submit a founder video</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label htmlFor="videoUrl" className="mb-1 block text-sm text-[#888]">
-              Video URL (YouTube, TikTok, Instagram)
-            </label>
-            <input
-              id="videoUrl"
-              type="url"
-              required
-              placeholder="https://youtube.com/watch?v=..."
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              onBlur={() => void handleVideoUrlBlur()}
-              className="w-full rounded-xl border border-[#333] bg-[#0a0a0a] px-4 py-3 outline-none ring-[#ff3333] focus:ring-2"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="email" className="mb-1 block text-sm text-[#888]">
-              Email{" "}
-              <span className="text-[#666]">
-                {emailRequired
-                  ? "(required — first time this startup is added)"
-                  : "(optional — only required the first time your startup is added)"}
+      <section className="mx-auto max-w-4xl">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#9ca3af]">
+                ▶
               </span>
-            </label>
+              <input
+                id="videoUrl"
+                type="url"
+                required
+                placeholder="Paste YouTube, TikTok, or Instagram URL"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                onBlur={() => void handleVideoUrlBlur()}
+                className="w-full rounded-2xl border border-[#e8e4df] bg-white py-3.5 pl-10 pr-4 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20"
+              />
+            </div>
             <input
               id="email"
               type="email"
               required={emailRequired}
-              placeholder="founder@startup.com"
+              placeholder={emailRequired ? "Email (required)" : "Email (first time only)"}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-[#333] bg-[#0a0a0a] px-4 py-3 outline-none ring-[#ff3333] focus:ring-2"
+              className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:w-56"
             />
+            <button
+              type="submit"
+              disabled={submitting || checking}
+              className="shrink-0 rounded-2xl bg-[#f4623a] px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[#e8573a] disabled:opacity-50"
+            >
+              {submitting ? "Posting…" : "Post"}
+            </button>
           </div>
 
           {productPreview && (
-            <p className="text-sm text-[#888]">
-              Product detected:{" "}
-              <a href={productPreview} className="text-[#ff6666] underline" target="_blank" rel="noreferrer">
+            <p className="text-center text-sm text-[#6b7280]">
+              Product in description:{" "}
+              <a
+                href={productPreview}
+                className="font-medium text-[#f4623a] hover:underline"
+                target="_blank"
+                rel="noreferrer"
+              >
                 {productPreview}
               </a>
             </p>
           )}
 
-          {checking && <p className="text-sm text-[#666]">Reading video description…</p>}
-          {formError && <p className="text-sm text-[#ff6666]">{formError}</p>}
-          {formSuccess && <p className="text-sm text-[#66ff99]">{formSuccess}</p>}
-
-          <button
-            type="submit"
-            disabled={submitting || checking}
-            className="w-full rounded-xl bg-[#ff3333] px-4 py-3 text-base font-bold text-black transition hover:bg-[#ff5555] disabled:opacity-50 sm:w-auto"
-          >
-            {submitting ? "Submitting…" : "Add to the board"}
-          </button>
+          {checking && <p className="text-center text-sm text-[#9ca3af]">Reading video description…</p>}
+          {formError && <p className="text-center text-sm text-[#dc2626]">{formError}</p>}
+          {formSuccess && <p className="text-center text-sm font-medium text-[#059669]">{formSuccess}</p>}
         </form>
       </section>
 
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <h2 className="text-2xl font-black sm:text-3xl">Leaderboard</h2>
-          <span className="text-sm text-[#666]">{entries.length} startups</span>
-        </div>
-
-        {loading ? (
-          <p className="text-[#666]">Loading…</p>
-        ) : entries.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-[#333] p-8 text-center text-[#666]">
-            No startups yet. Be the first founder on camera.
-          </p>
-        ) : (
-          <div className="divide-y divide-[#222] rounded-2xl border border-[#222] bg-[#0a0a0a]">
-            {entries.map((entry) => (
-              <div key={entry.id}>
-                <button
-                  type="button"
-                  onClick={() => void toggleRow(entry)}
-                  className="flex w-full items-center gap-3 px-4 py-4 text-left transition hover:bg-[#111] sm:gap-4 sm:px-5"
-                >
-                  <span className="w-10 shrink-0 text-2xl font-black tabular-nums text-[#ff3333] sm:w-12 sm:text-3xl">
-                    #{entry.rank}
-                  </span>
-                  <img
-                    src={faviconUrl(entry.product_host)}
-                    alt=""
-                    className="h-8 w-8 shrink-0 rounded-lg bg-[#222]"
-                    loading="lazy"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-bold">{entry.name}</div>
-                    <a
-                      href={entry.product_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="truncate text-sm text-[#888] underline-offset-2 hover:text-[#ff6666] hover:underline"
-                    >
-                      {entry.product_host}
-                    </a>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-2xl font-black tabular-nums sm:text-3xl">{entry.video_count}</div>
-                    <div className="text-xs uppercase tracking-wide text-[#666]">videos</div>
-                  </div>
-                </button>
-
-                {expandedId === entry.id && (
-                  <div className="border-t border-[#222] bg-[#111] px-4 py-4 sm:px-5">
-                    {videosLoading ? (
-                      <p className="text-sm text-[#666]">Loading videos…</p>
-                    ) : expandedVideos.length === 0 ? (
-                      <p className="text-sm text-[#666]">No videos</p>
-                    ) : (
-                      <ul className="space-y-3">
-                        {expandedVideos.map((video) => (
-                          <li
-                            key={video.id}
-                            className="flex flex-col gap-3 rounded-xl border border-[#222] bg-[#0a0a0a] p-3 sm:flex-row sm:items-center"
-                          >
-                            {video.thumbnail ? (
-                              <img
-                                src={video.thumbnail}
-                                alt=""
-                                className="h-20 w-full rounded-lg object-cover sm:h-16 sm:w-28"
-                              />
-                            ) : (
-                              <div className="flex h-20 w-full items-center justify-center rounded-lg bg-[#222] text-2xl sm:h-16 sm:w-28">
-                                ▶
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate font-semibold">{video.title}</div>
-                              <div className="text-xs text-[#666]">{platformLabel(video.platform)}</div>
-                              <a
-                                href={video.video_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm text-[#ff6666] underline"
-                              >
-                                Watch
-                              </a>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => void handleReport(video.id)}
-                              className="shrink-0 rounded-lg border border-[#442222] px-3 py-2 text-xs text-[#ff6666] hover:bg-[#221111]"
-                            >
-                              Report AI
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+      <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10">
+        <aside className="hidden space-y-4 lg:block">
+          <div className="rounded-2xl border border-[#e8e4df] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">How it works</p>
+            <ul className="mt-3 space-y-2 text-sm text-[#6b7280]">
+              <li>Paste a founder video URL</li>
+              <li>Product link must be in the description</li>
+              <li>Real human on camera — no AI slop</li>
+              <li>More videos = higher rank</li>
+            </ul>
           </div>
-        )}
-      </section>
+          <div className="rounded-2xl border border-[#fcd4c4] bg-[#fff9f7] p-4">
+            <p className="text-sm font-semibold text-[#111]">Rank is the videos — nothing else.</p>
+            <p className="mt-2 text-sm text-[#6b7280]">
+              Real founder. Real product link. Community reports keep the board honest.
+            </p>
+          </div>
+        </aside>
+
+        <section className="min-w-0 space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <h2 className="text-2xl font-bold text-[#111]">Leaderboard</h2>
+            {!loading && entries.length > 0 && (
+              <span className="text-sm text-[#9ca3af]">{entries.length} on the board</span>
+            )}
+          </div>
+
+          {loading ? (
+            <p className="text-[#6b7280]">Loading…</p>
+          ) : entries.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[#e8e4df] bg-white p-10 text-center">
+              <p className="text-lg font-semibold text-[#111]">Be the first founder on camera.</p>
+              <p className="mt-2 text-sm text-[#6b7280]">
+                Post one video with your product link in the description. You&apos;re #1.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {entries.map((entry) => (
+                <RankCard
+                  key={entry.id}
+                  entry={entry}
+                  expanded={expandedId === entry.id}
+                  videosLoading={videosLoading}
+                  videos={expandedId === entry.id ? expandedVideos : []}
+                  onToggle={() => void toggleRow(entry)}
+                  onReport={(id) => void handleReport(id)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
