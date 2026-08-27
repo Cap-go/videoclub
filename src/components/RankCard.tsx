@@ -1,5 +1,12 @@
-import { faviconUrl, type LeaderboardEntry, type StartupVideo } from "../lib/api";
+import { faviconUrl, type LeaderboardEntry, type ReportReason, type StartupVideo } from "../lib/api";
 import { formatDate, platformLabel, timeAgo } from "../lib/format";
+
+const REPORT_OPTIONS: Array<{ value: ReportReason; label: string }> = [
+  { value: "ai", label: "AI video" },
+  { value: "not_founder", label: "Not the founder" },
+  { value: "no_product_link", label: "No product link" },
+  { value: "other", label: "Other" },
+];
 
 interface RankCardProps {
   entry: LeaderboardEntry;
@@ -7,7 +14,7 @@ interface RankCardProps {
   videosLoading: boolean;
   videos: StartupVideo[];
   onToggle: () => void;
-  onReport: (videoId: number) => void;
+  onReport: (videoId: number, reason: ReportReason) => void;
 }
 
 export function RankCard({
@@ -58,7 +65,11 @@ export function RankCard({
           <p className="mt-0.5 line-clamp-2 text-sm text-[#6b7280]">
             {entry.video_count} founder video{entry.video_count === 1 ? "" : "s"} about{" "}
             {entry.product_host}
+            {entry.founder_name && <> · {entry.founder_name}</>}
           </p>
+          {entry.name_unconfirmed && (
+            <p className="mt-1 text-xs text-[#b45309]">Name not on the video</p>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#9ca3af]">
             <span>{timeAgo(entry.first_video_at)}</span>
             <span>·</span>
@@ -122,13 +133,32 @@ export function RankCard({
                       Watch
                     </a>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => onReport(video.id)}
-                    className="shrink-0 rounded-xl border border-[#fecaca] bg-[#fff5f5] px-3 py-2 text-xs font-medium text-[#dc2626] transition hover:bg-[#fee2e2]"
-                  >
-                    Report AI
-                  </button>
+                  <div className="flex shrink-0 flex-col gap-2 sm:items-end">
+                    <label className="sr-only" htmlFor={`report-${video.id}`}>
+                      Report reason
+                    </label>
+                    <select
+                      id={`report-${video.id}`}
+                      defaultValue="ai"
+                      className="rounded-xl border border-[#e8e4df] bg-white px-2 py-2 text-xs text-[#374151]"
+                    >
+                      {REPORT_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        const select = e.currentTarget.parentElement?.querySelector("select");
+                        onReport(video.id, (select?.value ?? "ai") as ReportReason);
+                      }}
+                      className="rounded-xl border border-[#fecaca] bg-[#fff5f5] px-3 py-2 text-xs font-medium text-[#dc2626] transition hover:bg-[#fee2e2]"
+                    >
+                      Report
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

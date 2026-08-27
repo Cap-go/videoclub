@@ -8,8 +8,16 @@ import {
   getVideoByPlatformId,
   getVideosForStartup,
 } from "../db/queries";
+import { buildEmailContent, EMAIL_PREVIEW_FIXTURES } from "../lib/email-templates";
 import { notifyRankChange, sendEmail } from "../lib/email";
+import { requireFounderOnCamera } from "../lib/face";
+import { founderNameMatchesVideo, isValidFounderName } from "../lib/founder";
 import { rateLimitReport, rateLimitSubmit } from "../lib/rate-limit";
+import {
+  parseReportReason,
+  removalReasonText,
+  type ReportReason,
+} from "../lib/reports";
 import {
   DUPLICATE_VIDEO_MESSAGE,
   extractProductUrl,
@@ -42,6 +50,14 @@ api.get("/leaderboard", async (c) => {
   return c.json({ period, entries });
 });
 
+api.get("/dev/email-previews", (c) => {
+  const previews = EMAIL_PREVIEW_FIXTURES.map((payload) => {
+    const content = buildEmailContent(payload, c.env.APP_URL);
+    return { kind: payload.kind, ...content };
+  });
+  return c.json({ previews });
+});
+
 api.get("/startups/:id/videos", async (c) => {
   const id = Number(c.req.param("id"));
   if (!Number.isFinite(id)) return c.json({ error: "Invalid startup id" }, 400);
@@ -56,6 +72,8 @@ api.get("/startups/:id/videos", async (c) => {
     startup: {
       id: startup.id,
       name: startup.name,
+      founder_name: startup.founder_name,
+      name_unconfirmed: Boolean(startup.name_unconfirmed),
       product_url: startup.product_url,
       product_host: startup.product_host,
     },
@@ -79,10 +97,18 @@ api.post("/check", async (c) => {
   try {
     const metadata = await fetchVideoMetadata(videoUrl);
 
+    try {
+      await requireFounderOnCamera(c.env, metadata.thumbnail);
+    } catch (faceErr) {
+      const message = faceErr instanceof Error ? faceErr.message : "Founder face required";
+      return c.json({ emailRequired: false, productFound: false, error: message });
+    }
+
     const existingVideo = await getVideoByPlatformId(c.env.DB, metadata.platform, metadata.videoId);
     if (existingVideo) {
       return c.json({
         emailRequired: false,
+        founderNameRequired: false,
         productFound: false,
         duplicate: true,
         error: DUPLICATE_VIDEO_MESSAGE,
@@ -93,6 +119,7 @@ api.post("/check", async (c) => {
     if (!productUrl) {
       return c.json({
         emailRequired: false,
+        founderNameRequired: false,
         productFound: false,
         error: "No product link found in the video description. Add your startup URL (not YouTube/TikTok/Instagram).",
       });
@@ -100,14 +127,15 @@ api.post("/check", async (c) => {
 
     const productHost = normalizeProductHost(productUrl);
     if (!productHost) {
-      return c.json({ emailRequired: false, productFound: false, error: "Invalid product URL in description." });
+      return c.json({ emailRequired: false, founderNameRequired: false, productFound: false, error: "Invalid product URL in description." });
     }
 
     const existing = await getStartupByHostIncludingRemoved(c.env.DB, productHost);
-    const emailRequired = !existing || !!existing.removed_at;
+    const isNewStartup = !existing || !!existing.removed_at;
 
     return c.json({
-      emailRequired,
+      emailRequired: isNewStartup,
+      founderNameRequired: isNewStartup,
       productFound: true,
       productUrl,
       productHost,
@@ -116,7 +144,7 @@ api.post("/check", async (c) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not read video";
-    return c.json({ emailRequired: false, productFound: false, error: message });
+    return c.json({ emailRequired: false, founderNameRequired: false, productFound: false, error: message });
   }
 });
 
@@ -131,11 +159,12 @@ api.post("/submit", async (c) => {
   }
 
   const body = await c.req
-    .json<{ videoUrl?: string; email?: string }>()
-    .catch(() => ({ videoUrl: undefined, email: undefined }));
+    .json<{ videoUrl?: string; email?: string; founderName?: string }>()
+    .catch(() => ({ videoUrl: undefined, email: undefined, founderName: undefined }));
 
   const videoUrl = body.videoUrl?.trim();
   const email = body.email?.trim().toLowerCase();
+  const founderName = body.founderName?.trim();
 
   if (!videoUrl) return c.json({ error: "Video URL is required" }, 400);
 
@@ -144,6 +173,13 @@ api.post("/submit", async (c) => {
     metadata = await fetchVideoMetadata(videoUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not read video";
+    return c.json({ error: message }, 400);
+  }
+
+  try {
+    await requireFounderOnCamera(c.env, metadata.thumbnail);
+  } catch (faceErr) {
+    const message = faceErr instanceof Error ? faceErr.message : "Founder face required";
     return c.json({ error: message }, 400);
   }
 
@@ -179,7 +215,27 @@ api.post("/submit", async (c) => {
         400,
       );
     }
+    if (!founderName || !isValidFounderName(founderName)) {
+      return c.json(
+        {
+          error: "Founder name is required the first time your startup is added (2–80 characters).",
+          founderNameRequired: true,
+        },
+        400,
+      );
+    }
   }
+
+  const nameConfirmed =
+    isNewStartup && founderName
+      ? founderNameMatchesVideo(
+          founderName,
+          metadata.title,
+          metadata.author,
+          metadata.description,
+        )
+      : true;
+  const nameUnconfirmed = isNewStartup ? (nameConfirmed ? 0 : 1) : 0;
 
   const now = new Date().toISOString();
   let startupId: number;
@@ -188,20 +244,36 @@ api.post("/submit", async (c) => {
     if (startup?.removed_at) {
       await c.env.DB.prepare(
         `UPDATE startups SET
-          product_url = ?, name = ?, email = ?, created_at = ?, removed_at = NULL,
+          product_url = ?, name = ?, founder_name = ?, name_unconfirmed = ?, email = ?, created_at = ?, removed_at = NULL,
           removal_reason = NULL, last_notified_rank = NULL
          WHERE id = ?`,
       )
-        .bind(normalizedProductUrl, hostToName(productHost), email!, now, startup.id)
+        .bind(
+          normalizedProductUrl,
+          hostToName(productHost),
+          founderName!,
+          nameUnconfirmed,
+          email!,
+          now,
+          startup.id,
+        )
         .run();
       startupId = startup.id;
       startup = await getStartupById(c.env.DB, startupId);
     } else {
       const insert = await c.env.DB.prepare(
-        `INSERT INTO startups (product_url, product_host, name, email, created_at, last_notified_rank)
-         VALUES (?, ?, ?, ?, ?, NULL)`,
+        `INSERT INTO startups (product_url, product_host, name, founder_name, name_unconfirmed, email, created_at, last_notified_rank)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
       )
-        .bind(normalizedProductUrl, productHost, hostToName(productHost), email!, now)
+        .bind(
+          normalizedProductUrl,
+          productHost,
+          hostToName(productHost),
+          founderName!,
+          nameUnconfirmed,
+          email!,
+          now,
+        )
         .run();
       startupId = Number(insert.meta.last_row_id);
       startup = await getStartupById(c.env.DB, startupId);
@@ -266,6 +338,8 @@ api.post("/submit", async (c) => {
     startup: {
       id: startupId,
       name: freshStartup?.name ?? hostToName(productHost),
+      founder_name: freshStartup?.founder_name ?? founderName ?? null,
+      name_unconfirmed: Boolean(freshStartup?.name_unconfirmed),
       product_url: normalizedProductUrl,
       rank,
     },
@@ -291,6 +365,9 @@ api.post("/report/:videoId", async (c) => {
   const videoId = Number(c.req.param("videoId"));
   if (!Number.isFinite(videoId)) return c.json({ error: "Invalid video id" }, 400);
 
+  const body = await c.req.json<{ reason?: string }>().catch((): { reason?: string } => ({}));
+  const reason: ReportReason = parseReportReason(body.reason) ?? "ai";
+
   const video = await getVideoById(c.env.DB, videoId);
   if (!video || video.removed_at) {
     return c.json({ error: "Video not found" }, 404);
@@ -302,7 +379,7 @@ api.post("/report/:videoId", async (c) => {
   }
 
   const now = new Date().toISOString();
-  const reason = "ai";
+  const removalReason = removalReasonText(reason);
 
   await c.env.DB.batch([
     c.env.DB.prepare(
@@ -311,7 +388,7 @@ api.post("/report/:videoId", async (c) => {
     c.env.DB.prepare("UPDATE videos SET removed_at = ? WHERE startup_id = ?").bind(now, startup.id),
     c.env.DB.prepare(
       "UPDATE startups SET removed_at = ?, removal_reason = ? WHERE id = ?",
-    ).bind(now, "Reported as AI-generated video", startup.id),
+    ).bind(now, removalReason, startup.id),
   ]);
 
   c.executionCtx.waitUntil(
@@ -323,6 +400,7 @@ api.post("/report/:videoId", async (c) => {
         productUrl: startup.product_url,
         videoUrl: video.video_url,
         videoTitle: video.title,
+        removalReason,
       });
 
       const board = await getLeaderboard(c.env.DB, "all");

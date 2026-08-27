@@ -9,6 +9,12 @@ database_name = "videoclub-db"
 database_id = "e0797cb5-25d1-462f-a9bd-aa2c236a3209"
 migrations_dir = "migrations"
 
+[[send_email]]
+name = "EMAIL"
+
+[ai]
+binding = "AI"
+
 [vars]
 APP_URL = "http://localhost:5173"
 EMAIL_FROM = "Video Club <hello@videoclub.lol>"

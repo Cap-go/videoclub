@@ -24,6 +24,25 @@ export function Rules() {
       </section>
 
       <section className="space-y-3">
+        <h2 className="text-xl font-bold text-[#111]">Founder on camera — not identity verification</h2>
+        <p className="leading-relaxed text-[#374151]">
+          We check that a <strong>person is visible</strong> in the video thumbnail — you on camera, not a
+          product demo or screen recording. We cannot prove who you are from a URL. No selfie KYC, no login,
+          no OAuth.
+        </p>
+        <p className="leading-relaxed text-[#374151]">
+          First time your startup joins the board, we ask for your <strong>founder name</strong>. We softly
+          check whether it appears in the video title, channel, or description. If it doesn&apos;t match, we
+          still accept the video and show a small &quot;name not on the video&quot; note — we do not block.
+          The product link in the description is still the hard gate.
+        </p>
+        <p className="leading-relaxed text-[#374151]">
+          We do <strong>not</strong> auto-ban with AI-detection models — too many false positives. Community
+          reports are the kill switch for AI videos and fake-founder listings.
+        </p>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-xl font-bold text-[#111]">Old videos count</h2>
         <p className="leading-relaxed text-[#374151]">
           No recency requirement on All-time. A video from 2019 is valid if the description{" "}
@@ -65,7 +84,7 @@ export function Rules() {
       <section className="space-y-3">
         <h2 className="text-xl font-bold text-[#111]">What we don&apos;t do</h2>
         <ul className="list-disc space-y-2 pl-5 leading-relaxed text-[#374151]">
-          <li>No video fingerprinting or perceptual hash. Re-uploads as a new id are allowed — Report AI is the escape hatch.</li>
+          <li>No video fingerprinting or perceptual hash. Re-uploads as a new id are allowed — reports are the escape hatch.</li>
           <li>No NLP &quot;is this really about your product?&quot; gate. Product link in the description is enough.</li>
           <li>No blocking old videos. No score decay. No minimum duration.</li>
           <li>No accounts. No login. No ads. No API keys.</li>
@@ -75,12 +94,13 @@ export function Rules() {
       <section className="space-y-3">
         <h2 className="text-xl font-bold text-[#111]">Reports & email</h2>
         <p className="leading-relaxed text-[#374151]">
-          Anyone can report a video as AI. One report removes that video <em>and</em> the entire startup from
-          the board. Founder gets emailed.
+          Anyone can report a video. Pick a reason: <strong>AI video</strong>,{" "}
+          <strong>Not the founder</strong>, <strong>No product link</strong>, or <strong>Other</strong>. One
+          report removes that video <em>and</em> the entire startup from the board. Founder gets emailed.
         </p>
         <p className="leading-relaxed text-[#374151]">
-          First time your startup hits the board? Email required once. Rank moves on All-time? Email. Removed?
-          Email.
+          First time your startup hits the board? Email and founder name required once. Rank moves on All-time?
+          Email. Removed? Email.
         </p>
       </section>
     </article>

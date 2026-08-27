@@ -44,6 +44,8 @@ export async function getLeaderboard(
       `SELECT
         s.id,
         s.name,
+        s.founder_name,
+        s.name_unconfirmed,
         s.product_url,
         s.product_host,
         COUNT(v.id) AS video_count,
@@ -72,6 +74,7 @@ export async function getLeaderboard(
   return rows.map((row) => ({
     ...row,
     video_count: Number(row.video_count),
+    name_unconfirmed: Boolean(row.name_unconfirmed),
     rank: rankMap.get(row.id) ?? 0,
   }));
 }

@@ -2,24 +2,37 @@
 
 Public leaderboard of startups ranked by how many **real founder videos** they post about their product.
 
-**Rank is the videos.** Real founder. Real product link. No AI.
+**Rank is the videos.** Real founder on camera. Real product link. No AI.
 
 Live at [videoclub.lol](https://videoclub.lol).
 
 ## How it works
 
 1. Paste a video URL (YouTube, TikTok, Instagram).
-2. The worker reads the video description and finds your product URL (not a platform link).
-3. First video for a new startup requires an email.
+2. We check for a person on camera and read the video description for your product URL.
+3. First video for a new startup requires email and founder name.
 4. Rank = count of valid videos. Tie-break: earlier first video wins.
-5. One AI report removes the video **and** the entire startup from the board.
+5. One community report removes the video **and** the entire startup from the board.
 
 ## Stack
 
 - Cloudflare Workers (Hono API + SPA assets binding)
+- Cloudflare Email Service (outbound founder emails)
+- Cloudflare Workers AI (face detection on thumbnails)
 - D1 (`videoclub-db`)
 - Bun, Vite, React 19, Tailwind 4
-- Resend for founder emails
+
+## Email setup (one-time)
+
+Domain `videoclub.lol` is on Cloudflare DNS. Before production emails work:
+
+1. Cloudflare dashboard → **Compute & AI** → **Email Service**
+2. **Onboard Domain** → `videoclub.lol`
+3. Complete SPF/DKIM as shown
+
+Emails send from `Video Club <hello@videoclub.lol>` via the Worker `EMAIL` binding (`send_email` in `wrangler.jsonc`).
+
+Preview templates locally at [/dev/emails](http://localhost:5173/dev/emails).
 
 ## Local development
 
@@ -59,19 +72,14 @@ Deploy runs after successful CI on `main` (or via workflow dispatch):
 | Secret | Purpose |
 |---|---|
 | `CLOUDFLARE_API_TOKEN` | Wrangler deploy + D1 migrations |
-| `RESEND_API_KEY` | Founder welcome / rank / removal emails |
 
 **Cloudflare Worker (production)**
 
-Set via dashboard or CLI:
+- `send_email` binding (`EMAIL`) — configured in `wrangler.jsonc`
+- Workers AI binding (`AI`) — for thumbnail face checks
+- Email Service domain onboarded for `videoclub.lol`
 
-```bash
-bunx wrangler secret put RESEND_API_KEY --env production
-```
-
-Email sends from `Video Club <hello@videoclub.lol>`.
-
-If `RESEND_API_KEY` is missing, submissions still work — emails are skipped and logged.
+If the `EMAIL` binding is missing or send fails, submissions still work — emails are skipped and logged.
 
 ## D1
 

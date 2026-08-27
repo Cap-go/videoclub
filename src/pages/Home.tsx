@@ -10,6 +10,7 @@ import {
   submitVideo,
   type BoardPeriod,
   type LeaderboardEntry,
+  type ReportReason,
   type StartupVideo,
 } from "../lib/api";
 
@@ -23,7 +24,9 @@ export function Home() {
 
   const [videoUrl, setVideoUrl] = useState("");
   const [email, setEmail] = useState("");
+  const [founderName, setFounderName] = useState("");
   const [emailRequired, setEmailRequired] = useState(false);
+  const [founderNameRequired, setFounderNameRequired] = useState(false);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -75,6 +78,7 @@ export function Home() {
     const url = videoUrl.trim();
     if (!url) {
       setEmailRequired(false);
+      setFounderNameRequired(false);
       setProductPreview(null);
       return;
     }
@@ -85,10 +89,12 @@ export function Home() {
       if (result.error) {
         setFormError(result.error);
         setEmailRequired(false);
+        setFounderNameRequired(false);
         setProductPreview(null);
         return;
       }
       setEmailRequired(result.emailRequired);
+      setFounderNameRequired(result.founderNameRequired ?? result.emailRequired);
       setProductPreview(result.productUrl ?? null);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Check failed");
@@ -103,34 +109,47 @@ export function Home() {
     setFormSuccess(null);
     setSubmitting(true);
     try {
-      const result = await submitVideo(videoUrl.trim(), email.trim() || undefined);
+      const result = await submitVideo(
+        videoUrl.trim(),
+        email.trim() || undefined,
+        founderName.trim() || undefined,
+      );
       setFormSuccess(
         `Posted "${result.video.title}" — ${result.startup.name} is now #${result.startup.rank}`,
       );
       setVideoUrl("");
       setEmail("");
+      setFounderName("");
       setEmailRequired(false);
+      setFounderNameRequired(false);
       setProductPreview(null);
       await loadBoard();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Submit failed";
       setFormError(message);
       if (message.includes("Email is required")) setEmailRequired(true);
+      if (message.includes("Founder name is required")) setFounderNameRequired(true);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleReport = async (videoId: number) => {
+  const handleReport = async (videoId: number, reason: ReportReason) => {
+    const labels: Record<ReportReason, string> = {
+      ai: "AI video",
+      not_founder: "not the founder",
+      no_product_link: "no product link",
+      other: "other issue",
+    };
     if (
       !confirm(
-        "Report this video as AI? One report removes the video and the entire startup from the board.",
+        `Report as "${labels[reason]}"? One report removes the video and the entire startup from the board.`,
       )
     ) {
       return;
     }
     try {
-      await reportVideo(videoId);
+      await reportVideo(videoId, reason);
       setExpandedId(null);
       setExpandedVideos([]);
       await loadBoard();
@@ -182,6 +201,17 @@ export function Home() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:w-56"
             />
+            {founderNameRequired && (
+              <input
+                id="founderName"
+                type="text"
+                required
+                placeholder="Founder name (required)"
+                value={founderName}
+                onChange={(e) => setFounderName(e.target.value)}
+                className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:w-48"
+              />
+            )}
             <button
               type="submit"
               disabled={submitting || checking}
@@ -264,7 +294,7 @@ export function Home() {
                   videosLoading={videosLoading}
                   videos={expandedId === entry.id ? expandedVideos : []}
                   onToggle={() => void toggleRow(entry)}
-                  onReport={(id) => void handleReport(id)}
+                  onReport={(id, reason) => void handleReport(id, reason)}
                 />
               ))}
             </div>

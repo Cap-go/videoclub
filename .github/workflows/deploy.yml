@@ -48,5 +48,3 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 9ee3d7479a3c359681e3fab2c8cb22c0
           command: deploy --env production
-        env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

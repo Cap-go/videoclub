@@ -1,9 +1,10 @@
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  EMAIL?: SendEmail;
+  AI?: Ai;
   APP_URL: string;
   EMAIL_FROM: string;
-  RESEND_API_KEY?: string;
 }
 
 export type BoardPeriod = "all" | "today";
@@ -13,6 +14,8 @@ export interface StartupRow {
   product_url: string;
   product_host: string;
   name: string;
+  founder_name: string | null;
+  name_unconfirmed: number;
   email: string;
   created_at: string;
   removed_at: string | null;
@@ -40,6 +43,8 @@ export interface LeaderboardEntry {
   id: number;
   rank: number;
   name: string;
+  founder_name: string | null;
+  name_unconfirmed: boolean;
   product_url: string;
   product_host: string;
   video_count: number;
@@ -68,4 +73,5 @@ export interface EmailPayload {
   previousRank?: number | null;
   videoUrl?: string;
   videoTitle?: string;
+  removalReason?: string;
 }

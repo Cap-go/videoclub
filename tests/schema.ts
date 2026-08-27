@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS startups (
   product_url TEXT NOT NULL,
   product_host TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
+  founder_name TEXT,
+  name_unconfirmed INTEGER NOT NULL DEFAULT 0,
   email TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   removed_at TEXT,
