@@ -23,15 +23,18 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Production DataFast: wrangler secret put DATAFAST_API_KEY --env production
   "vars": {
     "APP_URL": "http://localhost:5173",
-    "EMAIL_FROM": "Video Club <hello@videoclub.lol>"
+    "EMAIL_FROM": "Video Club <hello@videoclub.lol>",
+    "DATAFAST_WEBSITE_ID": "dfid_wluiJbHWvAdJPGboMTXwb"
   },
   "env": {
     "production": {
       "vars": {
         "APP_URL": "https://videoclub.lol",
-        "EMAIL_FROM": "Video Club <hello@videoclub.lol>"
+        "EMAIL_FROM": "Video Club <hello@videoclub.lol>",
+        "DATAFAST_WEBSITE_ID": "dfid_wluiJbHWvAdJPGboMTXwb"
       },
       "routes": [
         {

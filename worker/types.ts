@@ -9,6 +9,12 @@ export interface Env {
   PROXY_URL?: string;
   /** Optional fallback when InnerTube/HTML scraping is blocked by YouTube. */
   YOUTUBE_API_KEY?: string;
+  /** DataFast website API key (`df_`) or account token (`dft_` with analytics:read). */
+  DATAFAST_API_KEY?: string;
+  /** DataFast website id when using a `dft_` account token. */
+  DATAFAST_WEBSITE_ID?: string;
+  /** Optional public DataFast share URL for the visitors pill link. */
+  DATAFAST_SHARE_URL?: string;
 }
 
 export type BoardPeriod = "all" | "today";
