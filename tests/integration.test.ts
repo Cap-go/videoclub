@@ -101,6 +101,13 @@ describe("community challenges", () => {
     expect(board.some((e) => e.id === 1)).toBe(false);
   });
 
+  it("rejects invalid challenge reason", async () => {
+    const res = await postChallenge(1, "9.9.9.9", "fake_reason");
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error?: string };
+    expect(body.error).toContain("Invalid");
+  });
+
   it("emails founder on first challenge and on removal", async () => {
     const sendMock = env.EMAIL!.send as ReturnType<typeof vi.fn>;
 

@@ -17,7 +17,6 @@ import {
   challengedAsText,
   parseChallengeReason,
   REMOVED_HOST_MESSAGE,
-  type ChallengeReason,
 } from "../lib/challenges";
 import { rateLimitChallenge, rateLimitSubmit } from "../lib/rate-limit";
 import {
@@ -306,7 +305,10 @@ api.post("/challenge/:videoId", async (c) => {
   if (!Number.isFinite(videoId)) return c.json({ error: "Invalid video id" }, 400);
 
   const body = await c.req.json<{ reason?: string }>().catch((): { reason?: string } => ({}));
-  const reason: ChallengeReason = parseChallengeReason(body.reason) ?? "ai";
+  const reason = parseChallengeReason(body.reason);
+  if (!reason) {
+    return c.json({ error: "Invalid challenge reason." }, 400);
+  }
 
   const video = await getVideoById(c.env.DB, videoId);
   if (!video || video.removed_at) {
@@ -329,24 +331,29 @@ api.post("/challenge/:videoId", async (c) => {
     )
       .bind(videoId, reason, ipHash, now)
       .run();
-  } catch {
-    return c.json({ error: "You already challenged this video." }, 409);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE constraint")) {
+      return c.json({ error: "You already challenged this video." }, 409);
+    }
+    console.error("[challenge] insert failed", err);
+    return c.json({ error: "Failed to record challenge." }, 500);
   }
 
   const challengeCount = await getChallengeCount(c.env.DB, videoId);
   const reachedThreshold = challengeCount >= CHALLENGE_THRESHOLD;
 
-  c.executionCtx.waitUntil(
-    (async () => {
-      if (reachedThreshold) {
-        const removalReason = `Removed after ${challengeCount} community challenges`;
-        await c.env.DB.batch([
-          c.env.DB.prepare("UPDATE videos SET removed_at = ? WHERE startup_id = ?").bind(now, startup.id),
-          c.env.DB.prepare(
-            "UPDATE startups SET removed_at = ?, removal_reason = ? WHERE id = ?",
-          ).bind(now, removalReason, startup.id),
-        ]);
+  if (reachedThreshold) {
+    const removalReason = `Removed after ${challengeCount} community challenges`;
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE videos SET removed_at = ? WHERE startup_id = ?").bind(now, startup.id),
+      c.env.DB.prepare(
+        "UPDATE startups SET removed_at = ?, removal_reason = ? WHERE id = ?",
+      ).bind(now, removalReason, startup.id),
+    ]);
 
+    c.executionCtx.waitUntil(
+      (async () => {
         await sendEmail(c.env, {
           kind: "removed",
           to: startup.email,
@@ -363,20 +370,22 @@ api.post("/challenge/:videoId", async (c) => {
           const other = await getStartupById(c.env.DB, entry.id);
           if (other) await notifyRankChange(c.env, c.env.DB, other, entry.rank);
         }
-      } else if (challengeCount === 1) {
-        await sendEmail(c.env, {
-          kind: "challenged",
-          to: startup.email,
-          startupName: startup.name,
-          productUrl: startup.product_url,
-          videoUrl: video.video_url,
-          videoTitle: video.title,
-          challengeReason: challengedAsText(reason),
-          challengeCount,
-        });
-      }
-    })(),
-  );
+      })(),
+    );
+  } else if (challengeCount === 1) {
+    c.executionCtx.waitUntil(
+      sendEmail(c.env, {
+        kind: "challenged",
+        to: startup.email,
+        startupName: startup.name,
+        productUrl: startup.product_url,
+        videoUrl: video.video_url,
+        videoTitle: video.title,
+        challengeReason: challengedAsText(reason),
+        challengeCount,
+      }),
+    );
+  }
 
   return c.json({
     ok: true,

@@ -91,7 +91,7 @@ export function buildEmailContent(payload: EmailPayload, appUrl: string) {
       `Reason: ${reason}`,
       `Video: ${payload.videoTitle ?? "Unknown"} — ${payload.videoUrl ?? ""}`,
       ``,
-      `Challenges are public. Three distinct challenges removes the video and your startup from the board.`,
+      `Challenges are public. Three distinct challenges remove the video and your startup from the board.`,
       `Current challenges on this video: ${count}/3`,
       boardUrl,
     ].join("\n");
@@ -101,7 +101,7 @@ export function buildEmailContent(payload: EmailPayload, appUrl: string) {
        <p style="font-size:15px;line-height:1.6;margin:0;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>
        <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
        <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>
-       <p style="font-size:14px;color:${MUTED};margin:16px 0 0;">Challenges are public. Three distinct challenges removes the video and your startup. Currently <strong>${count}/3</strong>.</p>`,
+       <p style="font-size:14px;color:${MUTED};margin:16px 0 0;">Challenges are public. Three distinct challenges remove the video and your startup. Currently <strong>${count}/3</strong>.</p>`,
       boardUrl,
     );
     return { subject, text, html };

@@ -34,7 +34,10 @@ export function Rules() {
             Three challenges on one video and that video is gone, and the startup is gone with it. We email the
             founder.
           </li>
-          <li>One person cannot challenge the same video twice. Do not grief. The crowd has to agree.</li>
+          <li>
+            One IP address cannot challenge the same video twice. Three distinct challenges from different
+            people remove the startup.
+          </li>
         </ul>
       </section>
 

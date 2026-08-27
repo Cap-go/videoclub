@@ -62,7 +62,7 @@ CI runs on push/PR to `main`: typecheck, test, build.
 Deploy runs after successful CI on `main` (or via workflow dispatch):
 
 1. `bun run build` — `.env.production` sets `CLOUDFLARE_ENV=production` so the Vite plugin flattens `wrangler.jsonc` with `APP_URL=https://videoclub.lol` and custom domains (`videoclub.lol`, `www.videoclub.lol`). Without this, deploy uses `APP_URL=http://localhost:5173`.
-2. Apply D1 migrations remotely (`migrations/0004_challenges.sql` adds the `challenges` table).
+2. Apply D1 migrations remotely (`migrations/0004_challenges.sql` drops the legacy `reports` table and creates `challenges`).
 3. `wrangler deploy --env production` (uses the redirected config from `dist/videoclub/wrangler.json`).
 
 ### Required secrets

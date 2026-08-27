@@ -147,7 +147,7 @@ export function RankCard({
                     <select
                       id={`challenge-${video.id}`}
                       defaultValue="ai"
-                      className="rounded-xl border border-[#e8e4df] bg-white px-2 py-2 text-xs text-[#374151]"
+                      className="rounded-xl border border-[#e8e4df] bg-white px-2 py-2 text-base text-[#374151] sm:text-xs"
                     >
                       {CHALLENGE_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
