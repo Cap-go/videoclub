@@ -3,7 +3,7 @@ const LIVE_VISITORS_WIDGET_SRC =
 
 export function LiveVisitors() {
   return (
-    <div className="h-14 min-h-14 w-full max-w-[320px] shrink-0 bg-transparent sm:w-[280px]">
+    <div className="flex h-12 w-full max-w-[320px] shrink-0 items-center bg-transparent sm:h-10 sm:w-[280px] sm:max-w-none">
       <iframe
         src={LIVE_VISITORS_WIDGET_SRC}
         title="DataFast Widget"
