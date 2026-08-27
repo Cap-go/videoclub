@@ -5,6 +5,7 @@ import { initTestDb } from "./schema";
 import { getChallengeCount, getLeaderboard, getStartupById } from "../worker/db/queries";
 import { REMOVED_HOST_MESSAGE } from "../worker/lib/challenges";
 import { FOREIGN_ACCOUNT_CODE, REVIEW_INBOX } from "../worker/lib/platform-account";
+import { BIG_TECH_REJECT_MESSAGE } from "../worker/lib/submit-validation";
 
 interface MockVideoFetchOptions {
   title?: string;
@@ -240,6 +241,86 @@ describe("submit gates", () => {
     );
 
     expect(res.status).toBe(409);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects Google Big Tech listings (goo.gle product + official channel + @google.com email)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        title: "Gemini update",
+        description: "Try https://goo.gle for more",
+        author_url: "https://www.youtube.com/@googledevelopers",
+      }),
+    );
+
+    const res = await runWorker(
+      new Request("http://example.com/api/submit", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": "9.9.9.9", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: "https://youtube.com/watch?v=google1",
+          email: "sundar@google.com",
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe(BIG_TECH_REJECT_MESSAGE);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects decoy maker URL when video is from an official Google YouTube account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        description: "Check https://capgo.app",
+        author_url: "https://www.youtube.com/@googledevelopers",
+      }),
+    );
+
+    const res = await runWorker(
+      new Request("http://example.com/api/submit", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": "10.10.10.10", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: "https://youtube.com/watch?v=google2",
+          email: "founder@gmail.com",
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe(BIG_TECH_REJECT_MESSAGE);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("accepts gmail founder email with a real maker product", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        description: "Ship faster at https://capgo.app",
+        author_url: "https://www.youtube.com/@capgoapp",
+      }),
+    );
+
+    const res = await runWorker(
+      new Request("http://example.com/api/submit", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": "11.11.11.11", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: "https://youtube.com/watch?v=capgo1",
+          email: "founder@gmail.com",
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
 
     vi.unstubAllGlobals();
   });
