@@ -24,7 +24,7 @@ export function DevEmails() {
       <header className="space-y-2">
         <h1 className="text-3xl font-bold text-[#111]">Email previews</h1>
         <p className="text-[#6b7280]">
-          Dummy data — how welcome, rank change, and removal emails render in a client.
+          Dummy data — welcome, rank change, challenge escalation (1/3 and 2/3), and removal emails.
         </p>
       </header>
 
