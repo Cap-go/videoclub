@@ -33,7 +33,7 @@ export function DevEmails() {
 
       <div className="space-y-10">
         {previews.map((preview) => (
-          <section key={preview.kind} className="space-y-3">
+          <section key={preview.id ?? preview.kind} className="space-y-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">
                 {preview.kind.replace("_", " ")}

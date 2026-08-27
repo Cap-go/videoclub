@@ -41,48 +41,67 @@ export function buildEmailContent(payload: EmailPayload, appUrl: string) {
 
   if (payload.kind === "welcome") {
     const rank = payload.rank ?? "?";
-    const subject = `You're on Video Club at #${rank}`;
+    const subject = "Thanks for joining Video Club";
     const text = [
-      `Welcome to Video Club, ${payload.startupName}!`,
+      `Thanks for registering and posting your first video, ${payload.startupName}.`,
       ``,
       `You're on the board at rank #${rank}.`,
-      `Product: ${payload.productUrl}`,
+      `We'll email you when another maker outranks you.`,
       ``,
-      `Keep posting videos with your product link in the description.`,
-      `The crowd decides what's legit — post real founder videos.`,
+      `Keep posting real founder videos with your product link in the description.`,
       ``,
       boardUrl,
     ].join("\n");
     const html = emailShell(
       subject,
-      `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Welcome to <strong>Video Club</strong>, ${escapeHtml(payload.startupName)}!</p>
+      `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Thanks for registering and posting your first video, <strong>${escapeHtml(payload.startupName)}</strong>.</p>
        <p style="font-size:32px;font-weight:700;margin:0 0 8px;color:${ACCENT};">#${rank}</p>
-       <p style="font-size:14px;color:${MUTED};margin:0 0 20px;">Your current rank on the All-time board</p>
-       <p style="font-size:15px;line-height:1.6;margin:0;">Product: <a href="${escapeHtml(payload.productUrl)}" style="color:${ACCENT};">${escapeHtml(payload.productUrl)}</a></p>
-       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Keep posting videos with your product link in the description.</p>`,
+       <p style="font-size:14px;color:${MUTED};margin:0 0 20px;">Your spot on the All-time board</p>
+       <p style="font-size:15px;line-height:1.6;margin:0;">We'll email you when another maker outranks you.</p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Keep posting real founder videos with your product link in the description.</p>`,
       boardUrl,
     );
     return { subject, text, html };
   }
 
   if (payload.kind === "rank_changed") {
-    const from = payload.previousRank ?? "?";
-    const to = payload.rank ?? "?";
-    const subject = `Video Club rank update: #${from} → #${to}`;
-    const text = [
-      `${payload.startupName} moved on Video Club.`,
-      `Old rank: #${from}`,
-      `New rank: #${to}`,
-      `Product: ${payload.productUrl}`,
-      boardUrl,
-    ].join("\n");
-    const html = emailShell(
-      subject,
-      `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;"><strong>${escapeHtml(payload.startupName)}</strong> moved on Video Club.</p>
-       <p style="font-size:15px;line-height:1.6;margin:0;">Old rank: <strong>#${from}</strong><br/>New rank: <strong style="color:${ACCENT};">#${to}</strong></p>
-       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Product: <a href="${escapeHtml(payload.productUrl)}" style="color:${ACCENT};">${escapeHtml(payload.productUrl)}</a></p>`,
-      boardUrl,
-    );
+    const from = payload.previousRank;
+    const toRank = payload.rank;
+    const to = toRank ?? "?";
+    const climbed = from != null && toRank != null && toRank < from;
+    const subject = climbed
+      ? `You climbed on Video Club: #${from} → #${to}`
+      : `Another maker outranked you on Video Club: #${from ?? "?"} → #${to}`;
+    const text = climbed
+      ? [
+          `Nice — ${payload.startupName} climbed on Video Club.`,
+          `You moved from #${from} to #${to}.`,
+          ``,
+          `Keep posting real founder videos with your product link in the description.`,
+          boardUrl,
+        ].join("\n")
+      : [
+          `Another maker outranked ${payload.startupName} on Video Club.`,
+          `You dropped from #${from ?? "?"} to #${to}.`,
+          ``,
+          `Keep posting real founder videos with your product link in the description.`,
+          boardUrl,
+        ].join("\n");
+    const html = climbed
+      ? emailShell(
+          subject,
+          `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Nice — <strong>${escapeHtml(payload.startupName)}</strong> climbed on Video Club.</p>
+       <p style="font-size:15px;line-height:1.6;margin:0;">You moved from <strong>#${from}</strong> to <strong style="color:${ACCENT};">#${to}</strong>.</p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Keep posting real founder videos with your product link in the description.</p>`,
+          boardUrl,
+        )
+      : emailShell(
+          subject,
+          `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Another maker outranked <strong>${escapeHtml(payload.startupName)}</strong> on Video Club.</p>
+       <p style="font-size:15px;line-height:1.6;margin:0;">You dropped from <strong>#${from ?? "?"}</strong> to <strong style="color:${ACCENT};">#${to}</strong>.</p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Keep posting real founder videos with your product link in the description.</p>`,
+          boardUrl,
+        );
     return { subject, text, html };
   }
 
@@ -162,40 +181,68 @@ export function buildEmailContent(payload: EmailPayload, appUrl: string) {
   return { subject, text, html };
 }
 
-export const EMAIL_PREVIEW_FIXTURES: EmailPayload[] = [
+export interface EmailPreviewFixture {
+  id: string;
+  payload: EmailPayload;
+}
+
+export const EMAIL_PREVIEW_FIXTURES: EmailPreviewFixture[] = [
   {
-    kind: "welcome",
-    to: "founder@capgo.app",
-    startupName: "Capgo",
-    productUrl: "https://capgo.app",
-    rank: 4,
+    id: "welcome",
+    payload: {
+      kind: "welcome",
+      to: "founder@capgo.app",
+      startupName: "Capgo",
+      productUrl: "https://capgo.app",
+      rank: 4,
+    },
   },
   {
-    kind: "rank_changed",
-    to: "founder@capgo.app",
-    startupName: "Capgo",
-    productUrl: "https://capgo.app",
-    rank: 2,
-    previousRank: 5,
+    id: "rank-outranked",
+    payload: {
+      kind: "rank_changed",
+      to: "founder@capgo.app",
+      startupName: "Capgo",
+      productUrl: "https://capgo.app",
+      rank: 5,
+      previousRank: 2,
+    },
   },
   {
-    kind: "challenged",
-    to: "founder@capgo.app",
-    startupName: "Capgo",
-    productUrl: "https://capgo.app",
-    videoUrl: "https://www.youtube.com/watch?v=example",
-    videoTitle: "Why we built Capgo — founder update",
-    challengeReason: "AI video",
-    challengeCount: 1,
+    id: "rank-climbed",
+    payload: {
+      kind: "rank_changed",
+      to: "founder@capgo.app",
+      startupName: "Capgo",
+      productUrl: "https://capgo.app",
+      rank: 2,
+      previousRank: 5,
+    },
   },
   {
-    kind: "removed",
-    to: "founder@capgo.app",
-    startupName: "Capgo",
-    productUrl: "https://capgo.app",
-    videoUrl: "https://www.youtube.com/watch?v=example",
-    videoTitle: "Why we built Capgo — founder update",
-    removalReason: "Removed after 3 community challenges",
-    challengeCount: 3,
+    id: "challenged",
+    payload: {
+      kind: "challenged",
+      to: "founder@capgo.app",
+      startupName: "Capgo",
+      productUrl: "https://capgo.app",
+      videoUrl: "https://www.youtube.com/watch?v=example",
+      videoTitle: "Why we built Capgo — founder update",
+      challengeReason: "AI video",
+      challengeCount: 1,
+    },
+  },
+  {
+    id: "removed",
+    payload: {
+      kind: "removed",
+      to: "founder@capgo.app",
+      startupName: "Capgo",
+      productUrl: "https://capgo.app",
+      videoUrl: "https://www.youtube.com/watch?v=example",
+      videoTitle: "Why we built Capgo — founder update",
+      removalReason: "Removed after 3 community challenges",
+      challengeCount: 3,
+    },
   },
 ];

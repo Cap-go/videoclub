@@ -395,7 +395,13 @@ describe("email previews", () => {
   it("returns all email template previews", async () => {
     const res = await runWorker(new Request("http://example.com/api/dev/email-previews"));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { previews: Array<{ kind: string }> };
-    expect(body.previews.map((p) => p.kind)).toEqual(["welcome", "rank_changed", "challenged", "removed"]);
+    const body = (await res.json()) as { previews: Array<{ id: string; kind: string }> };
+    expect(body.previews.map((p) => p.id)).toEqual([
+      "welcome",
+      "rank-outranked",
+      "rank-climbed",
+      "challenged",
+      "removed",
+    ]);
   });
 });

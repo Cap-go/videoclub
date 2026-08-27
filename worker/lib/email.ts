@@ -30,6 +30,13 @@ export async function notifyRankChange(
   newRank: number,
 ): Promise<void> {
   if (startup.last_notified_rank === newRank) return;
+  if (startup.last_notified_rank === null) {
+    await db
+      .prepare("UPDATE startups SET last_notified_rank = ? WHERE id = ?")
+      .bind(newRank, startup.id)
+      .run();
+    return;
+  }
   await sendEmail(env, {
     kind: "rank_changed",
     to: startup.email,
