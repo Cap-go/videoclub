@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { buildEmbedInfo } from "../worker/lib/embed";
+import { buildEmbedInfo, youtubeEmbedUrl, youtubePosterUrl } from "../worker/lib/embed";
 
 describe("embed URL builders", () => {
-  it("builds privacy-enhanced YouTube embed URLs", () => {
+  it("builds official YouTube embed URLs", () => {
     const info = buildEmbedInfo("youtube", "dQw4w9WgXcQ", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
     expect(info.mode).toBe("iframe");
-    expect(info.embedUrl).toBe("https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ");
+    expect(info.embedUrl).toBe(youtubeEmbedUrl("dQw4w9WgXcQ"));
     expect(info.watchUrl).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  });
+
+  it("builds YouTube embed URLs with a custom origin", () => {
+    const url = youtubeEmbedUrl("dQw4w9WgXcQ", "https://example.test");
+    expect(url).toBe(
+      "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&playsinline=1&rel=0&modestbranding=1&origin=https%3A%2F%2Fexample.test",
+    );
+  });
+
+  it("builds YouTube poster URLs", () => {
+    expect(youtubePosterUrl("dQw4w9WgXcQ")).toBe("https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg");
   });
 
   it("builds TikTok official embed URLs", () => {

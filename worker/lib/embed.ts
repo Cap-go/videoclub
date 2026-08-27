@@ -13,7 +13,26 @@ function instagramKind(videoUrl?: string): "p" | "reel" {
   return "reel";
 }
 
-/** Build privacy-enhanced YouTube, TikTok, Instagram, or X embed URLs for the public feed. */
+const DEFAULT_SITE_ORIGIN = "https://videoclub.lol";
+
+/** YouTube poster image (hqdefault fallback when no stored thumbnail). */
+export function youtubePosterUrl(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+}
+
+/** Official YouTube embed URL; pass site origin so the player trusts the parent frame. */
+export function youtubeEmbedUrl(videoId: string, origin = DEFAULT_SITE_ORIGIN): string {
+  const params = new URLSearchParams({
+    autoplay: "1",
+    playsinline: "1",
+    rel: "0",
+    modestbranding: "1",
+    origin,
+  });
+  return `https://www.youtube.com/embed/${videoId}?${params}`;
+}
+
+/** Build YouTube, TikTok, Instagram, or X embed URLs for the public feed. */
 export function buildEmbedInfo(
   platform: VideoPlatform | string,
   videoId: string,
@@ -24,7 +43,7 @@ export function buildEmbedInfo(
   if (platform === "youtube" && videoId) {
     return {
       mode: "iframe",
-      embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}`,
+      embedUrl: youtubeEmbedUrl(videoId),
       watchUrl: videoUrl ?? `https://www.youtube.com/watch?v=${videoId}`,
     };
   }

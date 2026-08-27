@@ -1,4 +1,5 @@
-import { buildEmbedInfo } from "../../worker/lib/embed";
+import { useEffect, useState } from "react";
+import { buildEmbedInfo, youtubeEmbedUrl, youtubePosterUrl } from "../../worker/lib/embed";
 
 interface VideoEmbedProps {
   platform: string;
@@ -9,8 +10,104 @@ interface VideoEmbedProps {
   eager?: boolean;
 }
 
-export function VideoEmbed({ platform, videoId, videoUrl, title, thumbnail, eager = false }: VideoEmbedProps) {
+let activeYoutubeStop: (() => void) | null = null;
+
+function YouTubeClickToPlay({
+  videoId,
+  title,
+  thumbnail,
+  watchUrl,
+  eager,
+}: {
+  videoId: string;
+  title: string;
+  thumbnail: string | null;
+  watchUrl: string;
+  eager?: boolean;
+}) {
+  const [playing, setPlaying] = useState(false);
+  const poster = thumbnail ?? youtubePosterUrl(videoId);
+
+  const handlePlay = () => {
+    activeYoutubeStop?.();
+    const stop = () => setPlaying(false);
+    activeYoutubeStop = stop;
+    setPlaying(true);
+  };
+
+  useEffect(() => {
+    return () => {
+      activeYoutubeStop = null;
+    };
+  }, []);
+
+  if (playing) {
+    const origin = typeof window !== "undefined" ? window.location.origin : undefined;
+    return (
+      <div className="group relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+        <iframe
+          src={youtubeEmbedUrl(videoId, origin)}
+          title={title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+          className="absolute inset-0 h-full w-full border-0"
+        />
+        <a
+          href={watchUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 opacity-0 transition hover:text-white group-hover:opacity-100"
+        >
+          Watch on YouTube
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="group relative aspect-video w-full overflow-hidden rounded-xl bg-black">
+      <img
+        src={poster}
+        alt=""
+        className="h-full w-full object-cover"
+        loading={eager ? "eager" : "lazy"}
+      />
+      <button
+        type="button"
+        onClick={handlePlay}
+        aria-label={`Play ${title}`}
+        className="absolute inset-0 flex items-center justify-center bg-black/30 transition hover:bg-black/40"
+      >
+        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#f4623a] pl-1 text-2xl text-white shadow-lg transition group-hover:scale-105">
+          ▶
+        </span>
+      </button>
+      <a
+        href={watchUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 transition hover:text-white"
+      >
+        Watch on YouTube
+      </a>
+    </div>
+  );
+}
+
+export function VideoEmbed({ platform, videoId, title, thumbnail, videoUrl, eager = false }: VideoEmbedProps) {
   const embed = buildEmbedInfo(platform, videoId ?? "", videoUrl);
+
+  if (platform === "youtube" && videoId) {
+    return (
+      <YouTubeClickToPlay
+        videoId={videoId}
+        title={title}
+        thumbnail={thumbnail}
+        watchUrl={embed.watchUrl}
+        eager={eager}
+      />
+    );
+  }
 
   if (embed.mode === "iframe" && embed.embedUrl) {
     const aspectClass =
