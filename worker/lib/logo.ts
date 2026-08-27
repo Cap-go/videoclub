@@ -2,6 +2,8 @@ import { proxiedFetch, type ProxiedFetchBindings } from "./proxied-fetch";
 
 const LINK_TAG_RE = /<link\b([^>]*?)>/gi;
 const FETCH_TIMEOUT_MS = 5000;
+const MAX_HTML_BYTES = 256 * 1024;
+const MAX_ICON_CANDIDATES = 8;
 
 export const WELL_KNOWN_ICON_PATHS = [
   "/apple-touch-icon.png",
@@ -131,17 +133,20 @@ export function collectIconCandidates(html: string, origin: string): IconCandida
   return candidates;
 }
 
-export function pickBestIconCandidate(candidates: IconCandidate[]): IconCandidate | null {
-  const ranked = candidates
+export function sortIconCandidates(candidates: IconCandidate[]): IconCandidate[] {
+  return [...candidates]
     .map((candidate) => ({ candidate, score: iconCandidateScore(candidate.rel, candidate.sizes) }))
     .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.candidate);
+}
 
-  return ranked[0]?.candidate ?? null;
+export function pickBestIconCandidate(candidates: IconCandidate[]): IconCandidate | null {
+  return sortIconCandidates(candidates)[0] ?? null;
 }
 
 export function pickBestIconFromHtml(html: string, origin: string): IconCandidate | null {
-  return pickBestIconCandidate(collectIconCandidates(html, origin));
+  return pickBestIconCandidate(collectIconCandidates(html.slice(0, MAX_HTML_BYTES), origin));
 }
 
 export function googleFaviconUrl(host: string, size: 128 | 256 = 256): string {
@@ -210,14 +215,6 @@ async function fetchIconViaProxy(
   }
 }
 
-export function sortIconCandidates(candidates: IconCandidate[]): IconCandidate[] {
-  return [...candidates]
-    .map((candidate) => ({ candidate, score: iconCandidateScore(candidate.rel, candidate.sizes) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .map((entry) => entry.candidate);
-}
-
 export async function trySiteIcons(
   host: string,
   bindings: ProxiedFetchBindings,
@@ -239,13 +236,15 @@ export async function trySiteIcons(
     // fall through to well-known paths
   }
 
-  const candidates = html
-    ? sortIconCandidates(collectIconCandidates(html, origin))
-    : WELL_KNOWN_ICON_PATHS.map((path) => ({
-        url: `${origin}${path}`,
-        rel: "apple-touch-icon",
-        sizes: 180,
-      }));
+  const candidates = (
+    html
+      ? sortIconCandidates(collectIconCandidates(html.slice(0, MAX_HTML_BYTES), origin))
+      : WELL_KNOWN_ICON_PATHS.map((path) => ({
+          url: `${origin}${path}`,
+          rel: "apple-touch-icon",
+          sizes: 180,
+        }))
+  ).slice(0, MAX_ICON_CANDIDATES);
 
   for (const candidate of candidates) {
     const icon = await fetchIconViaProxy(candidate.url, bindings);

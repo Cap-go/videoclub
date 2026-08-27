@@ -66,17 +66,26 @@ api.get("/logo/:host", async (c) => {
   const host = normalizeProductHost(decoded);
   if (!host) return c.json({ error: "Invalid host" }, 400);
 
+  const startup = await getStartupByHostIncludingRemoved(c.env.DB, host);
+  if (!startup || startup.removed_at) {
+    return c.json({ error: "Invalid host" }, 400);
+  }
+
   const cache = await caches.open("videoclub-logos");
   const cacheKey = new Request(`https://logo.videoclub.internal/${host}`);
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
   const logo = await fetchStartupLogo(host, c.env);
+  const isFallback = logo.contentType.startsWith("image/svg+xml");
+  const cacheControl = isFallback
+    ? "public, max-age=3600, stale-while-revalidate=600"
+    : "public, max-age=604800, stale-while-revalidate=86400";
   const response = new Response(logo.bytes as BodyInit, {
     status: 200,
     headers: {
       "Content-Type": logo.contentType,
-      "Cache-Control": "public, max-age=604800, stale-while-revalidate=86400",
+      "Cache-Control": cacheControl,
     },
   });
 

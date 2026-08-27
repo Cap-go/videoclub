@@ -1,6 +1,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../worker/index";
+import { initTestDb } from "./schema";
 
 const runWorker = async (request: Request) => {
   const ctx = createExecutionContext();
@@ -9,7 +10,26 @@ const runWorker = async (request: Request) => {
   return response;
 };
 
+async function seedLogoStartup() {
+  await initTestDb(env.DB);
+  await env.DB.prepare("DELETE FROM startups").run();
+  await env.DB.prepare(
+    `INSERT INTO startups (product_url, product_host, name, email, created_at)
+     VALUES ('https://newco.dev', 'newco.dev', 'Newco', 'founder@newco.dev', datetime('now'))`,
+  ).run();
+}
+
+async function clearLogoCache(host = "newco.dev") {
+  const cache = await caches.open("videoclub-logos");
+  await cache.delete(new Request(`https://logo.videoclub.internal/${host}`));
+}
+
 describe("logo proxy", () => {
+  beforeEach(async () => {
+    await seedLogoStartup();
+    await clearLogoCache();
+  });
+
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -70,8 +90,11 @@ describe("logo proxy", () => {
     );
   });
 
-  it("rejects invalid hosts", async () => {
-    const res = await runWorker(new Request("http://videoclub.lol/api/logo/youtube.com"));
-    expect(res.status).toBe(400);
+  it("rejects blocked and unknown hosts", async () => {
+    const blocked = await runWorker(new Request("http://videoclub.lol/api/logo/youtube.com"));
+    expect(blocked.status).toBe(400);
+
+    const unknown = await runWorker(new Request("http://videoclub.lol/api/logo/unknown.dev"));
+    expect(unknown.status).toBe(400);
   });
 });
