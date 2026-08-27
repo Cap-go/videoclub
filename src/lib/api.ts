@@ -105,11 +105,18 @@ export function getFeed(cursor?: string, limit = 30) {
   }>(`/api/feed?${params}`);
 }
 
+export type ProductCandidate = {
+  host: string;
+  product_url: string;
+  isNew: boolean;
+};
+
 export function checkVideo(videoUrl: string) {
   return api<{
     emailRequired: boolean;
     productFound: boolean;
     duplicate?: boolean;
+    candidates?: ProductCandidate[];
     productUrl?: string;
     productHost?: string;
     startupName?: string;
@@ -121,7 +128,11 @@ export function checkVideo(videoUrl: string) {
   });
 }
 
-export function submitVideo(videoUrl: string, email?: string, options?: { force?: boolean }) {
+export function submitVideo(
+  videoUrl: string,
+  email?: string,
+  options?: { force?: boolean; productHost?: string },
+) {
   return api<{
     ok: boolean;
     startup: { id: number; name: string; product_url: string; rank: number };
@@ -131,6 +142,7 @@ export function submitVideo(videoUrl: string, email?: string, options?: { force?
     body: JSON.stringify({
       videoUrl,
       email: email || undefined,
+      productHost: options?.productHost,
       force: options?.force === true ? true : undefined,
     }),
   });

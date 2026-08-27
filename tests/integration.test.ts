@@ -362,6 +362,159 @@ describe("submit gates", () => {
   });
 });
 
+describe("product domain candidates", () => {
+  beforeEach(async () => {
+    await initTestDb(env.DB);
+    await env.DB.prepare("DELETE FROM challenges").run();
+    await env.DB.prepare("DELETE FROM videos").run();
+    await env.DB.prepare("DELETE FROM startups").run();
+    await env.DB.prepare("DELETE FROM rate_limits").run();
+    mockEmailBinding();
+  });
+
+  async function postCheck(videoUrl: string) {
+    return runWorker(
+      new Request("http://example.com/api/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl }),
+      }),
+    );
+  }
+
+  async function postSubmit(
+    videoUrl: string,
+    options: { email?: string; productHost?: string; ip?: string } = {},
+  ) {
+    return runWorker(
+      new Request("http://example.com/api/submit", {
+        method: "POST",
+        headers: {
+          "CF-Connecting-IP": options.ip ?? "30.30.30.30",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          videoUrl,
+          email: options.email,
+          productHost: options.productHost,
+        }),
+      }),
+    );
+  }
+
+  it("returns one candidate with host for a single-product description", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({ description: "Building https://solo.dev — follow along" }),
+    );
+
+    const res = await postCheck("https://youtube.com/watch?v=solo1");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      productFound: boolean;
+      candidates?: Array<{ host: string; product_url: string; isNew: boolean }>;
+      productHost?: string;
+      emailRequired?: boolean;
+    };
+    expect(body.productFound).toBe(true);
+    expect(body.candidates).toEqual([
+      { host: "solo.dev", product_url: "https://solo.dev", isNew: true },
+    ]);
+    expect(body.productHost).toBe("solo.dev");
+    expect(body.emailRequired).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("returns multiple candidates and attributes submit to the chosen host", async () => {
+    await env.DB.prepare(
+      `INSERT INTO startups (id, product_url, product_host, name, email, created_at)
+       VALUES (50, 'https://alpha.io', 'alpha.io', 'Alpha', 'alpha@test.com', datetime('now'))`,
+    ).run();
+
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        description: "Try https://alpha.io and also https://beta.dev for this launch",
+      }),
+    );
+
+    const checkRes = await postCheck("https://youtube.com/watch?v=multi1");
+    expect(checkRes.status).toBe(200);
+    const checkBody = (await checkRes.json()) as {
+      candidates: Array<{ host: string; isNew: boolean }>;
+      emailRequired: boolean;
+    };
+    expect(checkBody.candidates.map((c) => c.host)).toEqual(["alpha.io", "beta.dev"]);
+    expect(checkBody.candidates[0]?.isNew).toBe(false);
+    expect(checkBody.candidates[1]?.isNew).toBe(true);
+    expect(checkBody.emailRequired).toBe(false);
+
+    const submitRes = await postSubmit("https://youtube.com/watch?v=multi1", {
+      productHost: "beta.dev",
+      email: "founder@beta.dev",
+    });
+    expect(submitRes.status).toBe(200);
+    const submitBody = (await submitRes.json()) as { startup: { name: string } };
+    expect(submitBody.startup.name).toBe("Beta");
+
+    const startup = await env.DB.prepare("SELECT product_host FROM startups WHERE product_host = ?")
+      .bind("beta.dev")
+      .first<{ product_host: string }>();
+    expect(startup?.product_host).toBe("beta.dev");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("skips email when submitting to an existing host", async () => {
+    await env.DB.prepare(
+      `INSERT INTO startups (id, product_url, product_host, name, email, created_at)
+       VALUES (51, 'https://known.io', 'known.io', 'Known', 'known@test.com', datetime('now'))`,
+    ).run();
+
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({ description: "Back at https://known.io with more updates" }),
+    );
+
+    const res = await postSubmit("https://youtube.com/watch?v=known1");
+    expect(res.status).toBe(200);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("requires email when submitting to a new host", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({ description: "Launching https://fresh.dev today" }),
+    );
+
+    const res = await postSubmit("https://youtube.com/watch?v=fresh1");
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { emailRequired?: boolean };
+    expect(body.emailRequired).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects a product host that is not in the candidate list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({ description: "Only https://real.dev in here" }),
+    );
+
+    const res = await postSubmit("https://youtube.com/watch?v=fakehost1", {
+      productHost: "fake.io",
+      email: "founder@fake.io",
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("not in this video");
+
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("platform account locks", () => {
   beforeEach(async () => {
     await initTestDb(env.DB);
