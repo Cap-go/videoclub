@@ -154,12 +154,13 @@ api.post("/check", async (c) => {
       });
     }
 
-    const productUrl = extractProductUrl(metadata.description);
+    const productUrl = metadata.productUrl ?? extractProductUrl(metadata.description);
     if (!productUrl) {
       return c.json({
         emailRequired: false,
         productFound: false,
-        error: "No product link found in the video description. Add your startup URL (not YouTube/TikTok/Instagram/X).",
+        error:
+          "No product link found in the video description. Add your startup URL (not YouTube/TikTok/Instagram/X).",
       });
     }
 
@@ -222,7 +223,7 @@ api.post("/submit", async (c) => {
     return c.json({ error: DUPLICATE_VIDEO_MESSAGE }, 409);
   }
 
-  const productUrlFound = extractProductUrl(metadata.description);
+  const productUrlFound = metadata.productUrl ?? extractProductUrl(metadata.description);
   if (!productUrlFound) {
     return c.json(
       {
