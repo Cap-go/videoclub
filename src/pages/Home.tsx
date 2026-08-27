@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
+import {
+  getHowItWorksSeen,
+  getPrefilledEmail,
+  HowItWorksModal,
+  markHowItWorksSeen,
+} from "../components/HowItWorksModal";
 import { LivePill } from "../components/LivePill";
 import { RankCard } from "../components/RankCard";
 import {
@@ -29,7 +35,9 @@ export function Home() {
   const [videosLoading, setVideosLoading] = useState(false);
 
   const [videoUrl, setVideoUrl] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => getPrefilledEmail());
+  const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+  const [modalEmail, setModalEmail] = useState(() => getPrefilledEmail());
   const [productFound, setProductFound] = useState(false);
   const [emailRequired, setEmailRequired] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -69,6 +77,21 @@ export function Home() {
   useEffect(() => {
     void loadBoard();
   }, [loadBoard]);
+
+  useEffect(() => {
+    if (!getHowItWorksSeen()) {
+      setHowItWorksOpen(true);
+    }
+  }, []);
+
+  const closeHowItWorks = useCallback((savedEmail?: string) => {
+    markHowItWorksSeen();
+    setHowItWorksOpen(false);
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setModalEmail(savedEmail);
+    }
+  }, []);
 
   useEffect(() => {
     const url = videoUrl.trim();
@@ -202,6 +225,13 @@ export function Home() {
 
   return (
     <div className="space-y-10">
+      <HowItWorksModal
+        open={howItWorksOpen}
+        email={modalEmail}
+        onEmailChange={setModalEmail}
+        onClose={closeHowItWorks}
+      />
+
       <LivePill startupCount={entries.length} videoCount={totalVideos} />
 
       <section className="mx-auto max-w-4xl space-y-4 pt-2 text-center">
@@ -218,26 +248,28 @@ export function Home() {
 
       <section className="mx-auto max-w-4xl">
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <div className="relative min-w-0 flex-1">
-              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#9ca3af]">
-                ▶
-              </span>
-              <input
-                id="videoUrl"
-                type="url"
-                placeholder="Paste YouTube, TikTok, Instagram, or X URL"
-                value={videoUrl}
-                onChange={(e) => setVideoUrl(e.target.value)}
-                className="w-full rounded-2xl border border-[#e8e4df] bg-white py-3.5 pl-10 pr-4 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20"
-              />
-            </div>
+          <div className="relative">
+            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#9ca3af]">
+              ▶
+            </span>
+            <input
+              id="videoUrl"
+              type="url"
+              placeholder="Paste YouTube, TikTok, Instagram, or X URL"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              className="w-full rounded-2xl border border-[#e8e4df] bg-white py-3.5 pl-10 pr-12 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20"
+            />
             <button
-              type="submit"
-              disabled={!canPost}
-              className="shrink-0 rounded-2xl bg-[#f4623a] px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[#e8573a] disabled:opacity-50"
+              type="button"
+              onClick={() => {
+                setModalEmail(email);
+                setHowItWorksOpen(true);
+              }}
+              className="absolute right-3 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#e8e4df] bg-[#faf8f5] text-xs font-semibold text-[#6b7280] transition hover:border-[#f4623a] hover:text-[#f4623a]"
+              aria-label="How it works"
             >
-              {submitting ? "Posting…" : "Post"}
+              i
             </button>
           </div>
 
@@ -250,13 +282,21 @@ export function Home() {
                 placeholder="Email for rank updates"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:max-w-md"
+                className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20"
               />
               <p className="text-center text-sm text-[#6b7280] sm:text-left">
                 First time this startup is on the board — we need an email for rank updates.
               </p>
             </div>
           )}
+
+          <button
+            type="submit"
+            disabled={!canPost}
+            className="w-full rounded-2xl bg-[#f4623a] px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[#e8573a] disabled:opacity-50 sm:w-auto"
+          >
+            {submitting ? "Posting…" : "Post"}
+          </button>
 
           {productPreview && (
             <p className="text-center text-sm text-[#6b7280]">
