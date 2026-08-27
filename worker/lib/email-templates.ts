@@ -27,6 +27,10 @@ export function emailShell(title: string, body: string, boardUrl: string): strin
       <p style="margin:28px 0 0;">
         <a href="${escapeHtml(boardUrl)}" style="display:inline-block;background:${ACCENT};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:12px;">View the board →</a>
       </p>
+      <p style="margin:24px 0 0;font-size:12px;color:${MUTED};text-align:center;">
+        Made by <a href="https://x.com/martindonadieu" style="color:${MUTED};text-decoration:underline;">@martindonadieu</a>.
+        Main startup: <a href="https://capgo.app" style="color:${MUTED};text-decoration:underline;">Capgo</a>.
+      </p>
     </div>
   </div>
 </body></html>`;
@@ -102,6 +106,38 @@ export function buildEmailContent(payload: EmailPayload, appUrl: string) {
        <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
        <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>
        <p style="font-size:14px;color:${MUTED};margin:16px 0 0;">Challenges are public. Three distinct challenges remove the video and your startup. Currently <strong>${count}/3</strong>.</p>`,
+      boardUrl,
+    );
+    return { subject, text, html };
+  }
+
+  if (payload.kind === "foreign_account_review") {
+    const platform = payload.platform ?? "platform";
+    const host = payload.productHost ?? payload.startupName;
+    const subject = `Video Club review: second ${platform} account for ${host}`;
+    const text = [
+      `A submitter forced a video from a second ${platform} account for ${host}.`,
+      ``,
+      `Product host: ${host}`,
+      `Locked account: ${payload.lockedAccount ?? "unknown"}`,
+      `New account: ${payload.submittedAccount ?? "unknown"}`,
+      `Video: ${payload.videoTitle ?? "Unknown"} — ${payload.videoUrl ?? ""}`,
+      `Submitter email: ${payload.submitterEmail ?? "unknown"}`,
+      `Submitted at: ${payload.submittedAt ?? "unknown"}`,
+      ``,
+      `Please review — affiliate vs founder with multiple accounts.`,
+      boardUrl,
+    ].join("\n");
+    const html = emailShell(
+      subject,
+      `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">A submitter forced a video from a <strong>second ${escapeHtml(platform)} account</strong> for <strong>${escapeHtml(host)}</strong>.</p>
+       <p style="font-size:15px;line-height:1.6;margin:0;"><strong>Locked account:</strong> ${escapeHtml(payload.lockedAccount ?? "unknown")}<br/>
+       <strong>New account:</strong> ${escapeHtml(payload.submittedAccount ?? "unknown")}</p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
+       <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;"><strong>Submitter:</strong> ${escapeHtml(payload.submitterEmail ?? "unknown")}<br/>
+       <strong>Time:</strong> ${escapeHtml(payload.submittedAt ?? "unknown")}</p>
+       <p style="font-size:14px;color:${MUTED};margin:16px 0 0;">Please review — affiliate vs founder with multiple accounts.</p>`,
       boardUrl,
     );
     return { subject, text, html };

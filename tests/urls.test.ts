@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseDescriptionFromHtml, parsePublishedAtFromHtml } from "../worker/lib/video";
+import {
+  extractYouTubeNavigationUrls,
+  parseDescriptionFromHtml,
+  parsePublishedAtFromHtml,
+} from "../worker/lib/video";
 import {
   DUPLICATE_VIDEO_MESSAGE,
   detectPlatform,
@@ -61,6 +65,25 @@ describe("URL parsing", () => {
     expect(extractProductUrl(desc)).toBe("https://capgo.app");
   });
 
+  it("extracts bare domain without scheme as https", () => {
+    expect(extractProductUrl("try capgo.app today")).toBe("https://capgo.app");
+    expect(extractProductUrl("visit www.capgo.app/docs for more")).toBe("https://capgo.app/docs");
+  });
+
+  it("prefers explicit https URL over bare domain", () => {
+    const desc = "capgo.app is cool but use https://myapp.io instead";
+    expect(extractProductUrl(desc)).toBe("https://myapp.io");
+  });
+
+  it("parses YouTube id starting with hyphen from shorts and watch URLs", () => {
+    const id = "-abGcOfoKHg";
+    expect(extractPlatformVideoId(`https://youtube.com/shorts/${id}`, "youtube")).toBe(id);
+    expect(extractPlatformVideoId(`https://www.youtube.com/watch?v=${id}`, "youtube")).toBe(id);
+    expect(normalizeVideoUrl(`https://youtube.com/shorts/${id}`, "youtube")).toBe(
+      `https://www.youtube.com/watch?v=${id}`,
+    );
+  });
+
   it("normalizes product URLs", () => {
     expect(normalizeProductUrl("https://www.myapp.io/")).toBe("https://myapp.io");
   });
@@ -93,5 +116,17 @@ describe("description parsing", () => {
   it("extracts og:description for instagram-style pages", () => {
     const html = `<meta property="og:description" content="Launch at https://startup.dev now" />`;
     expect(parseDescriptionFromHtml(html, "instagram")).toBe("Launch at https://startup.dev now");
+  });
+
+  it("extracts attributedDescription and navigation URLs from Shorts HTML", () => {
+    const html = `
+      "attributedDescriptionBodyText":"Check out capgo.app for live updates"
+      "urlEndpoint":{"url":"https://capgo.app/docs"}
+      "webCommandMetadata":{"url":"https://www.youtube.com/redirect?q=https%3A%2F%2Fcapgo.app"}
+    `;
+    const description = parseDescriptionFromHtml(html, "youtube");
+    expect(description).toContain("capgo.app");
+    const navUrls = extractYouTubeNavigationUrls(html);
+    expect(navUrls.some((u) => u.includes("capgo.app"))).toBe(true);
   });
 });

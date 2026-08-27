@@ -80,6 +80,27 @@ export function Layout() {
 
       <footer className="border-t border-[#e8e4df] px-4 py-8 text-center text-sm text-[#6b7280]">
         <p className="font-medium text-[#111]">Rank is the videos — nothing else.</p>
+        <p className="mt-2 text-xs">
+          Made by{" "}
+          <a
+            href="https://x.com/martindonadieu"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#f4623a]"
+          >
+            @martindonadieu
+          </a>
+          . Main startup:{" "}
+          <a
+            href="https://capgo.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-[#f4623a]"
+          >
+            Capgo
+          </a>
+          .
+        </p>
         <p className="mt-2">
           <Link to="/feed" className="hover:text-[#f4623a]">
             Feed

@@ -3,6 +3,7 @@ import {
   getChallengeCount,
   getFeedVideos,
   getLeaderboard,
+  getLockedPlatformAccount,
   getStartupByHostIncludingRemoved,
   getStartupById,
   getStartupRank,
@@ -20,6 +21,12 @@ import {
   REMOVED_HOST_MESSAGE,
 } from "../lib/challenges";
 import { rateLimitChallenge, rateLimitSubmit } from "../lib/rate-limit";
+import {
+  FOREIGN_ACCOUNT_CODE,
+  foreignAccountMessage,
+  platformLabel,
+  REVIEW_INBOX,
+} from "../lib/platform-account";
 import {
   DUPLICATE_VIDEO_MESSAGE,
   extractProductUrl,
@@ -193,11 +200,12 @@ api.post("/submit", async (c) => {
   }
 
   const body = await c.req
-    .json<{ videoUrl?: string; email?: string }>()
-    .catch(() => ({ videoUrl: undefined, email: undefined }));
+    .json<{ videoUrl?: string; email?: string; force?: boolean }>()
+    .catch(() => ({ videoUrl: undefined, email: undefined, force: undefined }));
 
   const videoUrl = body.videoUrl?.trim();
   const email = body.email?.trim().toLowerCase();
+  const force = body.force === true;
 
   if (!videoUrl) return c.json({ error: "Video URL is required" }, 400);
 
@@ -248,8 +256,37 @@ api.post("/submit", async (c) => {
     }
   }
 
+  if (!isNewStartup) {
+    const lockedAccount = await getLockedPlatformAccount(c.env.DB, startup!.id, metadata.platform);
+    const submittedAccount = metadata.platformAccount;
+
+    if (lockedAccount && submittedAccount && lockedAccount !== submittedAccount) {
+      if (!force) {
+        return c.json(
+          {
+            error: foreignAccountMessage(metadata.platform),
+            code: FOREIGN_ACCOUNT_CODE,
+            platform: metadata.platform,
+            lockedAccount,
+            submittedAccount,
+          },
+          409,
+        );
+      }
+    }
+  }
+
   const now = new Date().toISOString();
   let startupId: number;
+  const lockedBeforeInsert = !isNewStartup
+    ? await getLockedPlatformAccount(c.env.DB, startup!.id, metadata.platform)
+    : null;
+  const needsReview =
+    !isNewStartup &&
+    force &&
+    lockedBeforeInsert != null &&
+    metadata.platformAccount != null &&
+    lockedBeforeInsert !== metadata.platformAccount;
 
   if (isNewStartup) {
     const insert = await c.env.DB.prepare(
@@ -265,8 +302,8 @@ api.post("/submit", async (c) => {
 
   await c.env.DB.prepare(
     `INSERT INTO videos
-      (startup_id, video_url, video_id, platform, title, description, thumbnail, author, product_url_found, published_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (startup_id, video_url, video_id, platform, title, description, thumbnail, author, platform_account, product_url_found, published_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       startupId,
@@ -277,6 +314,7 @@ api.post("/submit", async (c) => {
       metadata.description,
       metadata.thumbnail,
       metadata.author,
+      metadata.platformAccount,
       normalizedProductUrl,
       metadata.publishedAt,
       now,
@@ -289,6 +327,24 @@ api.post("/submit", async (c) => {
   c.executionCtx.waitUntil(
     (async () => {
       if (!freshStartup) return;
+
+      if (needsReview) {
+        await sendEmail(c.env, {
+          kind: "foreign_account_review",
+          to: REVIEW_INBOX,
+          startupName: freshStartup.name,
+          productUrl: freshStartup.product_url,
+          productHost,
+          platform: platformLabel(metadata.platform),
+          lockedAccount: lockedBeforeInsert ?? "unknown",
+          submittedAccount: metadata.platformAccount ?? "unknown",
+          videoUrl: metadata.normalizedUrl,
+          videoTitle: metadata.title,
+          submitterEmail: email ?? freshStartup.email,
+          submittedAt: now,
+        });
+      }
+
       if (isNewStartup) {
         await sendEmail(c.env, {
           kind: "welcome",

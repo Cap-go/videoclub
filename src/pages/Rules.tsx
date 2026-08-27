@@ -42,6 +42,15 @@ export function Rules() {
       </section>
 
       <section className="space-y-3">
+        <h2 className="text-xl font-bold text-[#111]">One account per platform</h2>
+        <p className="leading-relaxed text-[#374151]">
+          Each domain gets one YouTube account, one TikTok account, and one Instagram account. Affiliates
+          cannot post for your startup. If you legitimately have two accounts on the same platform, you can
+          force the submit — we get an email and review it.
+        </p>
+      </section>
+
+      <section className="space-y-3">
         <h2 className="text-xl font-bold text-[#111]">All-time vs Today</h2>
         <p className="leading-relaxed text-[#374151]">
           <strong>All-time</strong> counts every valid video, including your back catalog.{" "}

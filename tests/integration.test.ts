@@ -4,8 +4,16 @@ import worker from "../worker/index";
 import { initTestDb } from "./schema";
 import { getChallengeCount, getLeaderboard, getStartupById } from "../worker/db/queries";
 import { REMOVED_HOST_MESSAGE } from "../worker/lib/challenges";
+import { FOREIGN_ACCOUNT_CODE, REVIEW_INBOX } from "../worker/lib/platform-account";
 
-function mockVideoFetch(extra?: { title?: string; description?: string }) {
+interface MockVideoFetchOptions {
+  title?: string;
+  description?: string;
+  author?: string;
+  author_url?: string;
+}
+
+function mockVideoFetch(extra?: MockVideoFetchOptions) {
   return vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === "string" ? input : input.toString();
     if (url.includes("noembed.com")) {
@@ -13,12 +21,31 @@ function mockVideoFetch(extra?: { title?: string; description?: string }) {
         JSON.stringify({
           title: extra?.title ?? "Founder update",
           description: extra?.description ?? "Building https://newco.dev — follow along",
+          author_name: extra?.author ?? "Founder",
+          author_url: extra?.author_url,
         }),
         { status: 200 },
       );
     }
     if (url.includes("youtube.com/oembed")) {
-      return new Response(JSON.stringify({ title: extra?.title ?? "Founder update" }), { status: 200 });
+      return new Response(
+        JSON.stringify({
+          title: extra?.title ?? "Founder update",
+          author_name: extra?.author ?? "Founder",
+          author_url: extra?.author_url ?? "https://www.youtube.com/@founder",
+        }),
+        { status: 200 },
+      );
+    }
+    if (url.includes("youtubei/v1/player")) {
+      return new Response(
+        JSON.stringify({
+          videoDetails: {
+            shortDescription: extra?.description ?? "Building https://newco.dev — follow along",
+          },
+        }),
+        { status: 200 },
+      );
     }
     return new Response("<html></html>", { status: 200, headers: { "Content-Type": "text/html" } });
   });
@@ -213,6 +240,152 @@ describe("submit gates", () => {
     );
 
     expect(res.status).toBe(409);
+
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("platform account locks", () => {
+  beforeEach(async () => {
+    await initTestDb(env.DB);
+    await env.DB.prepare("DELETE FROM challenges").run();
+    await env.DB.prepare("DELETE FROM videos").run();
+    await env.DB.prepare("DELETE FROM startups").run();
+    await env.DB.prepare("DELETE FROM rate_limits").run();
+    mockEmailBinding();
+  });
+
+  async function postSubmit(
+    videoUrl: string,
+    email: string,
+    options: { force?: boolean; ip?: string } = {},
+  ) {
+    return runWorker(
+      new Request("http://example.com/api/submit", {
+        method: "POST",
+        headers: {
+          "CF-Connecting-IP": options.ip ?? "20.20.20.20",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ videoUrl, email, force: options.force }),
+      }),
+    );
+  }
+
+  it("first video locks platform account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        description: "Try https://capgo.app today",
+        author_url: "https://www.youtube.com/@CapgoApp",
+      }),
+    );
+
+    const res = await postSubmit("https://youtube.com/watch?v=lock1", "founder@capgo.app", {
+      ip: "21.21.21.21",
+    });
+    expect(res.status).toBe(200);
+
+    const video = await env.DB
+      .prepare("SELECT platform_account FROM videos WHERE video_id = 'lock1'")
+      .first<{ platform_account: string | null }>();
+    expect(video?.platform_account).toBe("https://www.youtube.com/@capgoapp");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("second video from same account is accepted", async () => {
+    await env.DB.prepare(
+      `INSERT INTO startups (id, product_url, product_host, name, email, created_at)
+       VALUES (10, 'https://capgo.app', 'capgo.app', 'Capgo', 'founder@capgo.app', datetime('now'))`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO videos (startup_id, video_url, video_id, platform, title, description, product_url_found, platform_account, created_at)
+       VALUES (10, 'https://youtube.com/watch?v=first1', 'first1', 'youtube', 'First', 'https://capgo.app', 'https://capgo.app', 'https://www.youtube.com/@capgoapp', datetime('now'))`,
+    ).run();
+
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        description: "https://capgo.app",
+        author_url: "https://www.youtube.com/@CapgoApp",
+      }),
+    );
+
+    const res = await postSubmit("https://youtube.com/watch?v=second1", "founder@capgo.app", {
+      ip: "22.22.22.22",
+    });
+    expect(res.status).toBe(200);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("different account on same platform returns 409 without force", async () => {
+    await env.DB.prepare(
+      `INSERT INTO startups (id, product_url, product_host, name, email, created_at)
+       VALUES (11, 'https://capgo.app', 'capgo.app', 'Capgo', 'founder@capgo.app', datetime('now'))`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO videos (startup_id, video_url, video_id, platform, title, description, product_url_found, platform_account, created_at)
+       VALUES (11, 'https://youtube.com/watch?v=first2', 'first2', 'youtube', 'First', 'https://capgo.app', 'https://capgo.app', 'https://www.youtube.com/@capgoapp', datetime('now'))`,
+    ).run();
+
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        description: "https://capgo.app",
+        author_url: "https://www.youtube.com/@RandomAffiliate",
+        author: "Random Affiliate",
+      }),
+    );
+
+    const res = await postSubmit("https://youtube.com/watch?v=aff1", "founder@capgo.app", {
+      ip: "23.23.23.23",
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { code?: string; error?: string };
+    expect(body.code).toBe(FOREIGN_ACCOUNT_CODE);
+    expect(body.error).toContain("YouTube");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("force accepts and emails review inbox", async () => {
+    await env.DB.prepare(
+      `INSERT INTO startups (id, product_url, product_host, name, email, created_at)
+       VALUES (12, 'https://capgo.app', 'capgo.app', 'Capgo', 'founder@capgo.app', datetime('now'))`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO videos (startup_id, video_url, video_id, platform, title, description, product_url_found, platform_account, created_at)
+       VALUES (12, 'https://youtube.com/watch?v=first3', 'first3', 'youtube', 'First', 'https://capgo.app', 'https://capgo.app', 'https://www.youtube.com/@capgoapp', datetime('now'))`,
+    ).run();
+
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        description: "https://capgo.app",
+        author_url: "https://www.youtube.com/@OtherCapgo",
+        author: "Other Capgo",
+      }),
+    );
+
+    const sendMock = env.EMAIL!.send as ReturnType<typeof vi.fn>;
+    sendMock.mockClear();
+
+    const res = await postSubmit("https://youtube.com/watch?v=aff2", "founder@capgo.app", {
+      force: true,
+      ip: "24.24.24.24",
+    });
+    expect(res.status).toBe(200);
+
+    expect(
+      sendMock.mock.calls.some((c) => (c[0] as { to?: string }).to === REVIEW_INBOX),
+    ).toBe(true);
+    expect(
+      sendMock.mock.calls.some((c) =>
+        (c[0] as { subject?: string }).subject?.includes("review"),
+      ),
+    ).toBe(true);
 
     vi.unstubAllGlobals();
   });
