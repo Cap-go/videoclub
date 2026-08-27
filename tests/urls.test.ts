@@ -125,6 +125,35 @@ describe("URL parsing", () => {
     );
   });
 
+  it("rejects vendor chrome hosts as product URLs", () => {
+    expect(normalizeProductHost("https://support.google.com/youtube/answer/1")).toBeNull();
+    expect(normalizeProductHost("https://accounts.google.com/ServiceLogin")).toBeNull();
+    expect(normalizeProductHost("https://play.google.com/store/apps")).toBeNull();
+    expect(normalizeProductHost("https://apps.apple.com/app/id123")).toBeNull();
+    expect(normalizeProductHost("https://google.com")).toBeNull();
+
+    expect(normalizeProductUrl("https://support.google.com/youtube/answer/3037019")).toBeNull();
+    expect(normalizeProductUrl("https://accounts.google.com/ServiceLogin?continue=1")).toBeNull();
+    expect(normalizeProductUrl("https://play.google.com/store/apps/details?id=foo")).toBeNull();
+    expect(normalizeProductUrl("https://apps.apple.com/app/example/id123")).toBeNull();
+    expect(normalizeProductUrl("https://google.com")).toBeNull();
+  });
+
+  it("extracts no product from chrome-only YouTube description", () => {
+    const desc = [
+      "How to Create One Link for Your iOS & Android App | OneLink Tutorial",
+      "https://support.google.com/youtube/answer/3037019?hl=en",
+      "https://accounts.google.com/ServiceLogin?service=youtube&continue=https://www.youtube.com/signin",
+    ].join("\n");
+    expect(extractProductUrl(desc)).toBeNull();
+  });
+
+  it("prefers real product URL over vendor chrome in description", () => {
+    const desc =
+      "promo https://support.google.com/youtube/answer/1 then try https://apppa.ge";
+    expect(extractProductUrl(desc)).toBe("https://apppa.ge");
+  });
+
   it("stores first non-platform URL as domain-only", () => {
     const desc =
       "Built with AI? No. Check https://capgo.app/docs/getting-started and also https://youtube.com/watch?v=1";
@@ -171,5 +200,34 @@ describe("description parsing", () => {
     expect(description).toContain("capgo.app");
     const navUrls = extractYouTubeNavigationUrls(html);
     expect(navUrls.some((u) => u.includes("capgo.app"))).toBe(true);
+    expect(navUrls.some((u) => u.includes("youtube.com"))).toBe(false);
+  });
+
+  it("does not append YouTube or Google chrome navigation URLs to description", () => {
+    const html = `
+      "shortDescription":"Tutorial for Apppa — one link for iOS and Android"
+      "urlEndpoint":{"url":"https://support.google.com/youtube/answer/3037019"}
+      "urlEndpoint":{"url":"/watch?v=otherVideo"}
+      "urlEndpoint":{"url":"https://accounts.google.com/ServiceLogin?service=youtube"}
+      "urlEndpoint":{"url":"https://apppa.ge"}
+      "webCommandMetadata":{"url":"/premium"}
+    `;
+    const description = parseDescriptionFromHtml(html, "youtube");
+    expect(description).toContain("Tutorial for Apppa");
+    expect(description).toContain("https://apppa.ge");
+    expect(description).not.toContain("support.google.com");
+    expect(description).not.toContain("accounts.google.com");
+    expect(description).not.toContain("/watch?v=");
+    expect(description).not.toContain("/premium");
+
+    const navUrls = extractYouTubeNavigationUrls(html);
+    expect(navUrls).toEqual(["https://apppa.ge"]);
+    expect(extractProductUrl(description)).toBe("https://apppa.ge");
+  });
+
+  it("keeps navigation URLs with uppercase HTTP(S) schemes", () => {
+    const html = `"urlEndpoint":{"url":"HTTPS://capgo.app/docs"}`;
+    const navUrls = extractYouTubeNavigationUrls(html);
+    expect(navUrls).toEqual(["HTTPS://capgo.app/docs"]);
   });
 });

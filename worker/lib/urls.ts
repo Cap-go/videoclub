@@ -20,6 +20,14 @@ const BLOCKED_HOSTS = new Set([
 
 const X_HOSTS = new Set(["x.com", "twitter.com", "mobile.x.com", "mobile.twitter.com"]);
 
+/** Platform/vendor chrome — exact host or any subdomain (e.g. support.google.com). */
+const BLOCKED_PARENT_DOMAINS = ["google.com", "apple.com", "facebook.com", "microsoft.com"];
+
+function isBlockedProductHost(host: string): boolean {
+  if (BLOCKED_HOSTS.has(host) || BLOCKED_HOSTS.has(`www.${host}`)) return true;
+  return BLOCKED_PARENT_DOMAINS.some((parent) => host === parent || host.endsWith(`.${parent}`));
+}
+
 export function normalizeProductHost(input: string): string | null {
   try {
     const url = new URL(input.startsWith("http") ? input : `https://${input}`);
@@ -27,7 +35,7 @@ export function normalizeProductHost(input: string): string | null {
     let host = url.hostname.toLowerCase();
     if (host.startsWith("www.")) host = host.slice(4);
     if (!host || host.includes(" ")) return null;
-    if (BLOCKED_HOSTS.has(host) || BLOCKED_HOSTS.has(`www.${host}`)) return null;
+    if (isBlockedProductHost(host)) return null;
     return host;
   } catch {
     return null;
