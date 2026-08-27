@@ -5,6 +5,7 @@ import {
   detectPlatform,
   extractPlatformVideoId,
   extractProductUrl,
+  normalizeProductHost,
   normalizeProductUrl,
   normalizeVideoUrl,
   SUPPORTED_PLATFORMS_MESSAGE,
@@ -512,25 +513,41 @@ function extractYouTubeDescription(html: string): string {
   return "";
 }
 
+function isProductNavigationUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    return normalizeProductHost(parsed.href) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** Test helper: extract navigation URLs from YouTube HTML (Shorts link cards, etc.) */
 export function extractYouTubeNavigationUrls(html: string): string[] {
   const urls = new Set<string>();
 
   const urlEndpointRe = /"urlEndpoint"\s*:\s*\{\s*"url"\s*:\s*"((?:\\.|[^"\\])*)"/g;
   for (const match of html.matchAll(urlEndpointRe)) {
-    if (match[1]) urls.add(decodeJsonString(match[1]));
+    if (match[1]) {
+      const decoded = decodeJsonString(match[1]);
+      if (isProductNavigationUrl(decoded)) urls.add(decoded);
+    }
   }
 
   const commandUrlRe = /"commandMetadata"\s*:\s*\{[^}]*"url"\s*:\s*"((?:\\.|[^"\\])*)"/g;
   for (const match of html.matchAll(commandUrlRe)) {
-    if (match[1]) urls.add(decodeJsonString(match[1]));
+    if (match[1]) {
+      const decoded = decodeJsonString(match[1]);
+      if (isProductNavigationUrl(decoded)) urls.add(decoded);
+    }
   }
 
   const webCommandRe = /"webCommandMetadata"\s*:\s*\{[^}]*"url"\s*:\s*"((?:\\.|[^"\\])*)"/g;
   for (const match of html.matchAll(webCommandRe)) {
     if (match[1]) {
       const decoded = decodeJsonString(match[1]);
-      if (decoded.startsWith("http")) urls.add(decoded);
+      if (isProductNavigationUrl(decoded)) urls.add(decoded);
     }
   }
 
