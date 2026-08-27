@@ -127,6 +127,38 @@ describe("URL parsing", () => {
     );
   });
 
+  it("rejects Apple short links and Spotify as product URLs", () => {
+    expect(normalizeProductHost("https://apple.co/foo")).toBeNull();
+    expect(normalizeProductHost("apple.co")).toBeNull();
+    expect(normalizeProductHost("https://open.spotify.com/track/abc")).toBeNull();
+    expect(normalizeProductHost("open.spotify.com")).toBeNull();
+    expect(normalizeProductUrl("https://apple.co/foo")).toBeNull();
+    expect(normalizeProductUrl("https://open.spotify.com/track/abc")).toBeNull();
+
+    expect(extractProductUrl("check https://apple.co/foo")).toBeNull();
+    expect(extractProductUrl("listen on open.spotify.com/track/abc")).toBeNull();
+
+    expect(findRejectedBigTechProductUrl("promo https://apple.co/foo")).toBe("https://apple.co/foo");
+    expect(
+      findRejectedBigTechProductUrl("listen https://open.spotify.com/track/abc"),
+    ).toBe("https://open.spotify.com/track/abc");
+  });
+
+  it("rejects implausible single-char-label hosts like d.r.e", () => {
+    expect(normalizeProductHost("d.r.e")).toBeNull();
+    expect(normalizeProductHost("https://d.r.e")).toBeNull();
+    expect(normalizeProductUrl("d.r.e")).toBeNull();
+    expect(extractProductUrl("Dr. Dre — D.R.E. music video")).toBeNull();
+    expect(extractProductUrl("title mentions D.R.E. without a real domain")).toBeNull();
+  });
+
+  it("still accepts real maker domains", () => {
+    expect(normalizeProductHost("https://capgo.app")).toBe("capgo.app");
+    expect(normalizeProductHost("https://moldraw.com")).toBe("moldraw.com");
+    expect(extractProductUrl("try https://capgo.app today")).toBe("https://capgo.app");
+    expect(extractProductUrl("built at moldraw.com")).toBe("https://moldraw.com");
+  });
+
   it("rejects vendor chrome hosts as product URLs", () => {
     expect(normalizeProductHost("https://support.google.com/youtube/answer/1")).toBeNull();
     expect(normalizeProductHost("https://accounts.google.com/ServiceLogin")).toBeNull();
