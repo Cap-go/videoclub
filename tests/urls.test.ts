@@ -67,7 +67,7 @@ describe("URL parsing", () => {
 
   it("extracts bare domain without scheme as https", () => {
     expect(extractProductUrl("try capgo.app today")).toBe("https://capgo.app");
-    expect(extractProductUrl("visit www.capgo.app/docs for more")).toBe("https://capgo.app/docs");
+    expect(extractProductUrl("visit www.capgo.app/docs for more")).toBe("https://capgo.app");
   });
 
   it("prefers explicit https URL over bare domain", () => {
@@ -84,8 +84,25 @@ describe("URL parsing", () => {
     );
   });
 
-  it("normalizes product URLs", () => {
+  it("normalizes product URLs to origin only", () => {
     expect(normalizeProductUrl("https://www.myapp.io/")).toBe("https://myapp.io");
+    expect(normalizeProductUrl("https://capgo.app/docs/getting-started")).toBe("https://capgo.app");
+    expect(normalizeProductUrl("https://www.capgo.app/foo?x=1")).toBe("https://capgo.app");
+    expect(normalizeProductUrl("capgo.app")).toBe("https://capgo.app");
+    expect(normalizeProductUrl("https://capgo.app/docs/getting-started#section")).toBe("https://capgo.app");
+  });
+
+  it("rejects platform hosts as product URLs", () => {
+    expect(normalizeProductUrl("https://youtube.com/watch?v=1")).toBeNull();
+    expect(normalizeProductUrl("https://www.tiktok.com/@x/video/123")).toBeNull();
+    expect(normalizeProductUrl("https://instagram.com/reel/abc")).toBeNull();
+    expect(extractProductUrl("check https://youtube.com/watch?v=1")).toBeNull();
+  });
+
+  it("stores first non-platform URL as domain-only", () => {
+    const desc =
+      "Built with AI? No. Check https://capgo.app/docs/getting-started and also https://youtube.com/watch?v=1";
+    expect(extractProductUrl(desc)).toBe("https://capgo.app");
   });
 
   it("derives startup name from host", () => {

@@ -31,9 +31,7 @@ export function normalizeProductUrl(input: string): string | null {
     if (!["http:", "https:"].includes(url.protocol)) return null;
     const host = normalizeProductHost(url.href);
     if (!host) return null;
-    url.hostname = host;
-    url.hash = "";
-    return url.toString().replace(/\/$/, "") || url.toString();
+    return `${url.protocol}//${host}`;
   } catch {
     return null;
   }
