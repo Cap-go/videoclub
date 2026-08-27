@@ -111,6 +111,38 @@ export function buildEmailContent(payload: EmailPayload, appUrl: string) {
     return { subject, text, html };
   }
 
+  if (payload.kind === "foreign_account_review") {
+    const platform = payload.platform ?? "platform";
+    const host = payload.productHost ?? payload.startupName;
+    const subject = `Video Club review: second ${platform} account for ${host}`;
+    const text = [
+      `A submitter forced a video from a second ${platform} account for ${host}.`,
+      ``,
+      `Product host: ${host}`,
+      `Locked account: ${payload.lockedAccount ?? "unknown"}`,
+      `New account: ${payload.submittedAccount ?? "unknown"}`,
+      `Video: ${payload.videoTitle ?? "Unknown"} — ${payload.videoUrl ?? ""}`,
+      `Submitter email: ${payload.submitterEmail ?? "unknown"}`,
+      `Submitted at: ${payload.submittedAt ?? "unknown"}`,
+      ``,
+      `Please review — affiliate vs founder with multiple accounts.`,
+      boardUrl,
+    ].join("\n");
+    const html = emailShell(
+      subject,
+      `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">A submitter forced a video from a <strong>second ${escapeHtml(platform)} account</strong> for <strong>${escapeHtml(host)}</strong>.</p>
+       <p style="font-size:15px;line-height:1.6;margin:0;"><strong>Locked account:</strong> ${escapeHtml(payload.lockedAccount ?? "unknown")}<br/>
+       <strong>New account:</strong> ${escapeHtml(payload.submittedAccount ?? "unknown")}</p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
+       <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;"><strong>Submitter:</strong> ${escapeHtml(payload.submitterEmail ?? "unknown")}<br/>
+       <strong>Time:</strong> ${escapeHtml(payload.submittedAt ?? "unknown")}</p>
+       <p style="font-size:14px;color:${MUTED};margin:16px 0 0;">Please review — affiliate vs founder with multiple accounts.</p>`,
+      boardUrl,
+    );
+    return { subject, text, html };
+  }
+
   const reason = payload.removalReason ?? "Removed after community challenges";
   const subject = "Removed from Video Club";
   const text = [

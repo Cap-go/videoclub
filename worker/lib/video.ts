@@ -1,4 +1,5 @@
 import type { VideoMetadata } from "../types";
+import { resolvePlatformAccount } from "./platform-account";
 import { detectPlatform, extractPlatformVideoId, normalizeVideoUrl, type VideoPlatform } from "./urls";
 
 const USER_AGENT =
@@ -57,6 +58,11 @@ export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadat
     description,
     thumbnail: oembed.thumbnail ?? noembed.thumbnail ?? null,
     author: oembed.author ?? noembed.author ?? null,
+    authorUrl: oembed.authorUrl ?? noembed.authorUrl ?? null,
+    platformAccount: resolvePlatformAccount(platform, {
+      author: oembed.author ?? noembed.author ?? null,
+      authorUrl: oembed.authorUrl ?? noembed.authorUrl ?? null,
+    }),
     publishedAt,
     normalizedUrl,
   };
@@ -67,6 +73,7 @@ interface OembedResult {
   description?: string;
   thumbnail?: string;
   author?: string;
+  authorUrl?: string;
 }
 
 async function fetchOembed(url: string, platform: VideoPlatform): Promise<OembedResult> {
@@ -92,6 +99,7 @@ async function fetchOembed(url: string, platform: VideoPlatform): Promise<Oembed
             ? data.thumbnail
             : undefined,
       author: typeof data.author_name === "string" ? data.author_name : undefined,
+      authorUrl: typeof data.author_url === "string" ? data.author_url : undefined,
     };
   } catch {
     return {};
@@ -110,6 +118,7 @@ async function fetchNoembed(url: string): Promise<OembedResult> {
       description: typeof data.description === "string" ? data.description : undefined,
       thumbnail: typeof data.thumbnail_url === "string" ? data.thumbnail_url : undefined,
       author: typeof data.author_name === "string" ? data.author_name : undefined,
+      authorUrl: typeof data.author_url === "string" ? data.author_url : undefined,
     };
   } catch {
     return {};

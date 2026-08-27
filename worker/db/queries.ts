@@ -1,4 +1,5 @@
 import type { BoardPeriod, FeedVideoEntry, LeaderboardEntry, StartupRow, VideoRow } from "../types";
+import { resolvePlatformAccount } from "../lib/platform-account";
 
 export interface RankedStartup {
   id: number;
@@ -144,6 +145,34 @@ export async function getStartupByHostIncludingRemoved(
     .prepare("SELECT * FROM startups WHERE product_host = ?")
     .bind(productHost)
     .first<StartupRow>();
+}
+
+export async function getLockedPlatformAccount(
+  db: D1Database,
+  startupId: number,
+  platform: string,
+): Promise<string | null> {
+  const row = await db
+    .prepare(
+      `SELECT platform_account, author
+       FROM videos
+       WHERE startup_id = ? AND platform = ? AND removed_at IS NULL
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    )
+    .bind(startupId, platform)
+    .first<{ platform_account: string | null; author: string | null }>();
+
+  if (!row) return null;
+  if (row.platform_account) return row.platform_account;
+
+  if (row.author) {
+    return resolvePlatformAccount(platform as "youtube" | "tiktok" | "instagram", {
+      author: row.author,
+    });
+  }
+
+  return null;
 }
 
 export async function getStartupById(db: D1Database, id: number): Promise<StartupRow | null> {

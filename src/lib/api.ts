@@ -52,9 +52,15 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
-  const data = (await res.json()) as T & { error?: string };
+  const data = (await res.json()) as T & { error?: string; code?: string };
   if (!res.ok) {
-    throw new Error(data.error ?? `Request failed (${res.status})`);
+    const err = new Error(data.error ?? `Request failed (${res.status})`) as Error & {
+      code?: string;
+      status?: number;
+    };
+    err.code = data.code;
+    err.status = res.status;
+    throw err;
   }
   return data;
 }
@@ -94,14 +100,18 @@ export function checkVideo(videoUrl: string) {
   });
 }
 
-export function submitVideo(videoUrl: string, email?: string) {
+export function submitVideo(videoUrl: string, email?: string, options?: { force?: boolean }) {
   return api<{
     ok: boolean;
     startup: { id: number; name: string; product_url: string; rank: number };
     video: { title: string; platform: string; url: string; publishedAt: string | null };
   }>("/api/submit", {
     method: "POST",
-    body: JSON.stringify({ videoUrl, email: email || undefined }),
+    body: JSON.stringify({
+      videoUrl,
+      email: email || undefined,
+      force: options?.force === true ? true : undefined,
+    }),
   });
 }
 

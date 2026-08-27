@@ -32,6 +32,7 @@ export interface VideoRow {
   description: string;
   thumbnail: string | null;
   author: string | null;
+  platform_account: string | null;
   product_url_found: string;
   published_at: string | null;
   created_at: string;
@@ -75,9 +76,11 @@ export interface VideoMetadata {
   author: string | null;
   publishedAt: string | null;
   normalizedUrl: string;
+  platformAccount: string | null;
+  authorUrl: string | null;
 }
 
-export type EmailKind = "welcome" | "rank_changed" | "challenged" | "removed";
+export type EmailKind = "welcome" | "rank_changed" | "challenged" | "removed" | "foreign_account_review";
 
 export interface EmailPayload {
   kind: EmailKind;
@@ -91,4 +94,10 @@ export interface EmailPayload {
   challengeReason?: string;
   challengeCount?: number;
   removalReason?: string;
+  productHost?: string;
+  platform?: string;
+  lockedAccount?: string;
+  submittedAccount?: string;
+  submitterEmail?: string;
+  submittedAt?: string;
 }

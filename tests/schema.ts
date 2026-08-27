@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS videos (
   description TEXT NOT NULL DEFAULT '',
   thumbnail TEXT,
   author TEXT,
+  platform_account TEXT,
   product_url_found TEXT NOT NULL,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),

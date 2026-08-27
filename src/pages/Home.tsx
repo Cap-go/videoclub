@@ -30,6 +30,7 @@ export function Home() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [productPreview, setProductPreview] = useState<string | null>(null);
+  const [foreignAccountWarning, setForeignAccountWarning] = useState<string | null>(null);
 
   const loadBoard = useCallback(async () => {
     setLoading(true);
@@ -98,13 +99,14 @@ export function Home() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, force = false) => {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
+    if (!force) setForeignAccountWarning(null);
     setSubmitting(true);
     try {
-      const result = await submitVideo(videoUrl.trim(), email.trim() || undefined);
+      const result = await submitVideo(videoUrl.trim(), email.trim() || undefined, { force });
       setFormSuccess(
         `Posted "${result.video.title}" — ${result.startup.name} is now #${result.startup.rank}`,
       );
@@ -112,11 +114,19 @@ export function Home() {
       setEmail("");
       setEmailRequired(false);
       setProductPreview(null);
+      setForeignAccountWarning(null);
       await loadBoard();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Submit failed";
-      setFormError(message);
-      if (message.includes("Email is required")) setEmailRequired(true);
+      const apiErr = err as Error & { code?: string };
+      const message = apiErr.message ?? "Submit failed";
+      if (apiErr.code === "FOREIGN_ACCOUNT") {
+        setForeignAccountWarning(message);
+        setFormError(null);
+      } else {
+        setFormError(message);
+        setForeignAccountWarning(null);
+        if (message.includes("Email is required")) setEmailRequired(true);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -168,7 +178,7 @@ export function Home() {
       </section>
 
       <section className="mx-auto max-w-4xl">
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative min-w-0 flex-1">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#9ca3af]">
@@ -218,6 +228,28 @@ export function Home() {
           )}
 
           {checking && <p className="text-center text-sm text-[#9ca3af]">Reading video description…</p>}
+          {foreignAccountWarning && (
+            <div className="rounded-2xl border border-[#fcd4c4] bg-[#fff9f7] p-4 text-center">
+              <p className="text-sm leading-relaxed text-[#374151]">{foreignAccountWarning}</p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForeignAccountWarning(null)}
+                  className="rounded-xl border border-[#e8e4df] bg-white px-4 py-2 text-sm font-medium text-[#111] transition hover:bg-[#faf8f5]"
+                >
+                  Go back
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={(e) => void handleSubmit(e, true)}
+                  className="rounded-xl border border-[#f4623a] bg-white px-4 py-2 text-sm font-medium text-[#f4623a] transition hover:bg-[#fff9f7] disabled:opacity-50"
+                >
+                  These are both my accounts — force
+                </button>
+              </div>
+            </div>
+          )}
           {formError && <p className="text-center text-sm text-[#dc2626]">{formError}</p>}
           {formSuccess && <p className="text-center text-sm font-medium text-[#059669]">{formSuccess}</p>}
         </form>
