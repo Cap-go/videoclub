@@ -720,8 +720,80 @@ interface XParsedMetadata {
   publishedAt: string | null;
 }
 
-export function parseXSyndicationResponse(data: Record<string, unknown>): XParsedMetadata {
+const X_MEDIA_HOSTS = new Set(["pic.x.com", "pic.twitter.com", "x.com", "twitter.com", "mobile.x.com", "mobile.twitter.com"]);
+
+/** Skip expanded t.co targets that point at tweet media or X permalinks, not products. */
+export function isXMediaExpandedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if (host === "pic.x.com" || host === "pic.twitter.com") return true;
+    if (X_MEDIA_HOSTS.has(host) && /\/(video|photo)\/\d+/.test(parsed.pathname)) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/** Expand t.co links in syndication tweet text using entities.urls expanded_url. */
+export function expandXSyndicationText(data: Record<string, unknown>): string {
   const text = typeof data.text === "string" ? data.text : "";
+  const entities = data.entities as Record<string, unknown> | undefined;
+  const urls = entities?.urls as Array<Record<string, unknown>> | undefined;
+  if (!urls?.length) return text;
+
+  let expanded = text;
+  for (const entry of urls) {
+    const shortUrl = typeof entry.url === "string" ? entry.url : null;
+    const expandedUrl = typeof entry.expanded_url === "string" ? entry.expanded_url : null;
+    if (!shortUrl || !expandedUrl || isXMediaExpandedUrl(expandedUrl)) continue;
+    expanded = expanded.split(shortUrl).join(expandedUrl);
+  }
+  return expanded;
+}
+
+function extractProductUrlFromXEntities(raw?: {
+  syndication?: Record<string, unknown>;
+  fxTweet?: Record<string, unknown>;
+}): string | null {
+  const candidates: string[] = [];
+
+  const syndicationUrls = (raw?.syndication?.entities as Record<string, unknown> | undefined)?.urls as
+    | Array<Record<string, unknown>>
+    | undefined;
+  for (const entry of syndicationUrls ?? []) {
+    const expandedUrl = typeof entry.expanded_url === "string" ? entry.expanded_url : null;
+    const displayUrl = typeof entry.display_url === "string" ? entry.display_url : null;
+    if (expandedUrl && !isXMediaExpandedUrl(expandedUrl)) {
+      candidates.push(expandedUrl);
+    } else if (displayUrl) {
+      candidates.push(displayUrl);
+    }
+  }
+
+  const facets = (raw?.fxTweet?.raw_text as Record<string, unknown> | undefined)?.facets as
+    | Array<Record<string, unknown>>
+    | undefined;
+  for (const facet of facets ?? []) {
+    if (facet.type !== "url") continue;
+    const replacement = typeof facet.replacement === "string" ? facet.replacement : null;
+    if (replacement && !isXMediaExpandedUrl(replacement)) {
+      candidates.push(replacement);
+    }
+  }
+
+  for (const candidate of candidates) {
+    const fromUrl = extractProductUrl(candidate);
+    if (fromUrl) return fromUrl;
+    const normalized = normalizeProductUrl(candidate);
+    if (normalized) return normalized;
+  }
+
+  return null;
+}
+
+export function parseXSyndicationResponse(data: Record<string, unknown>): XParsedMetadata {
+  const text = expandXSyndicationText(data);
   const user = data.user as Record<string, unknown> | undefined;
   const screenName = typeof user?.screen_name === "string" ? user.screen_name : null;
   const displayName = typeof user?.name === "string" ? user.name : null;
@@ -920,6 +992,9 @@ export async function resolveXProductUrl(
 ): Promise<string | null> {
   const fromText = extractProductUrl(description);
   if (fromText) return fromText;
+
+  const fromEntities = extractProductUrlFromXEntities(raw);
+  if (fromEntities) return fromEntities;
 
   const mentions =
     raw?.syndication != null

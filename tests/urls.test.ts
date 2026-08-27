@@ -119,6 +119,7 @@ describe("URL parsing", () => {
     expect(normalizeProductUrl("https://x.com/founder/status/123")).toBeNull();
     expect(normalizeProductUrl("https://twitter.com/founder/status/123")).toBeNull();
     expect(normalizeProductUrl("https://t.co/abc123")).toBeNull();
+    expect(normalizeProductUrl("https://pic.x.com/abc123")).toBeNull();
     expect(extractProductUrl("check https://youtube.com/watch?v=1")).toBeNull();
     expect(extractProductUrl("follow https://x.com/founder and visit https://capgo.app")).toBe(
       "https://capgo.app",
