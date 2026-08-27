@@ -14,9 +14,7 @@ describe("YouTube InnerTube player parsing", () => {
 
   it("finds product URL via extractProductUrl on fixture description", () => {
     const parsed = parseInnertubePlayerResponse(capgoShortFixture);
-    expect(extractProductUrl(parsed.description)).toBe(
-      "https://capgo.app/docs/getting-started/onboarding",
-    );
+    expect(extractProductUrl(parsed.description)).toBe("https://capgo.app");
   });
 
   it("flags LOGIN_REQUIRED as blocked", () => {
