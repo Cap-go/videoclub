@@ -1,6 +1,6 @@
 import type { VideoMetadata } from "../types";
 import { resolvePlatformAccount } from "./platform-account";
-import { type ProxiedFetchBindings, proxiedFetch } from "./proxied-fetch";
+import { isHttpBlocked, type ProxiedFetchBindings, proxiedFetch } from "./proxied-fetch";
 import {
   detectPlatform,
   extractPlatformVideoId,
@@ -679,7 +679,18 @@ export function tweetHasVideo(data: Record<string, unknown>): boolean {
   return false;
 }
 
-export function parseXSyndicationResponse(data: Record<string, unknown>): {
+export function fxTwitterHasVideo(tweet: Record<string, unknown>): boolean {
+  const media = tweet.media as Record<string, unknown> | undefined;
+  const all = media?.all as Array<Record<string, unknown>> | undefined;
+  if (all?.some((item) => item.type === "video" || item.type === "animated_gif")) {
+    return true;
+  }
+
+  const videos = media?.videos as unknown[] | undefined;
+  return Boolean(videos?.length);
+}
+
+interface XParsedMetadata {
   description: string;
   title: string;
   thumbnail: string | null;
@@ -687,7 +698,9 @@ export function parseXSyndicationResponse(data: Record<string, unknown>): {
   authorUrl: string | null;
   platformAccount: string | null;
   publishedAt: string | null;
-} {
+}
+
+export function parseXSyndicationResponse(data: Record<string, unknown>): XParsedMetadata {
   const text = typeof data.text === "string" ? data.text : "";
   const user = data.user as Record<string, unknown> | undefined;
   const screenName = typeof user?.screen_name === "string" ? user.screen_name : null;
@@ -705,6 +718,36 @@ export function parseXSyndicationResponse(data: Record<string, unknown>): {
   }
 
   const createdAt = typeof data.created_at === "string" ? data.created_at : null;
+  const authorUrl = screenName ? `https://x.com/${screenName}` : null;
+
+  return {
+    description: text,
+    title: displayName ? `${displayName} on X` : "Post on X",
+    thumbnail,
+    author: screenName ? `@${screenName}` : displayName,
+    authorUrl,
+    platformAccount: resolvePlatformAccount("x", { authorUrl, author: screenName }),
+    publishedAt: createdAt ? normalizePublishedAt(createdAt) : null,
+  };
+}
+
+export function parseFxTwitterResponse(tweet: Record<string, unknown>): XParsedMetadata {
+  const text = typeof tweet.text === "string" ? tweet.text : "";
+  const author = tweet.author as Record<string, unknown> | undefined;
+  const screenName = typeof author?.screen_name === "string" ? author.screen_name : null;
+  const displayName = typeof author?.name === "string" ? author.name : null;
+
+  let thumbnail: string | null = null;
+  const media = tweet.media as Record<string, unknown> | undefined;
+  const all = media?.all as Array<Record<string, unknown>> | undefined;
+  for (const item of all ?? []) {
+    if (item.type === "video" || item.type === "animated_gif") {
+      thumbnail = typeof item.thumbnail_url === "string" ? item.thumbnail_url : null;
+      if (thumbnail) break;
+    }
+  }
+
+  const createdAt = typeof tweet.created_at === "string" ? tweet.created_at : null;
   const authorUrl = screenName ? `https://x.com/${screenName}` : null;
 
   return {
@@ -737,34 +780,88 @@ export function parseXOembedHtml(html: string): { description: string; hasVideo:
   };
 }
 
-async function fetchXSyndication(
-  tweetId: string,
+function isXJsonResponseBlocked(response: Response, body: string): boolean {
+  if (!response.ok && (isHttpBlocked(response.status) || response.status >= 500)) return true;
+  const trimmed = body.trim();
+  if (!trimmed || trimmed === "{}") return true;
+  if (trimmed.startsWith("<")) return true;
+  return false;
+}
+
+async function fetchXJsonWithRetry(
+  url: string,
   bindings: VideoFetchBindings,
 ): Promise<Record<string, unknown> | null> {
-  const token = xSyndicationToken(tweetId);
-  const url = `https://cdn.syndication.twimg.com/tweet-result?id=${encodeURIComponent(tweetId)}&lang=en&token=${encodeURIComponent(token)}`;
   const requestInit: RequestInit = {
     headers: { Accept: "application/json", "User-Agent": CHROME_USER_AGENT },
   };
 
   try {
     let { response: res, layer } = await proxiedFetch(url, bindings, { init: requestInit });
-    if (!res.ok && layer === "direct") {
+    let body = await res.text();
+
+    if (isXJsonResponseBlocked(res, body) && layer === "direct") {
       const retry = await proxiedFetch(url, bindings, { forceProxy: true, init: requestInit });
       res = retry.response;
+      body = await res.text();
     }
-    if (!res.ok) return null;
 
-    const text = await res.text();
-    if (text.trim().startsWith("<")) return null;
+    if (isXJsonResponseBlocked(res, body)) return null;
 
-    const data = JSON.parse(text) as Record<string, unknown>;
+    const data = JSON.parse(body) as Record<string, unknown>;
     if (!data || Object.keys(data).length === 0) return null;
-    if (typeof data.text !== "string" && typeof data.id_str !== "string") return null;
     return data;
   } catch {
     return null;
   }
+}
+
+function buildXVideoMetadata(
+  videoId: string,
+  normalizedUrl: string,
+  parsed: XParsedMetadata,
+): VideoMetadata {
+  if (!parsed.description.trim()) {
+    throw new Error(X_EMPTY_MESSAGE);
+  }
+
+  return {
+    platform: "x",
+    videoId,
+    normalizedUrl,
+    title: parsed.title,
+    description: parsed.description,
+    thumbnail: parsed.thumbnail,
+    author: parsed.author,
+    authorUrl: parsed.authorUrl,
+    platformAccount: parsed.platformAccount,
+    publishedAt: parsed.publishedAt,
+  };
+}
+
+async function fetchXSyndication(
+  tweetId: string,
+  bindings: VideoFetchBindings,
+): Promise<Record<string, unknown> | null> {
+  const token = xSyndicationToken(tweetId);
+  const url = `https://cdn.syndication.twimg.com/tweet-result?id=${encodeURIComponent(tweetId)}&lang=en&token=${encodeURIComponent(token)}`;
+  const data = await fetchXJsonWithRetry(url, bindings);
+  if (!data) return null;
+  if (typeof data.text !== "string" && typeof data.id_str !== "string") return null;
+  return data;
+}
+
+async function fetchFxTwitter(
+  tweetId: string,
+  bindings: VideoFetchBindings,
+): Promise<Record<string, unknown> | null> {
+  const url = `https://api.fxtwitter.com/status/${encodeURIComponent(tweetId)}`;
+  const data = await fetchXJsonWithRetry(url, bindings);
+  if (!data || data.code !== 200) return null;
+
+  const tweet = data.tweet as Record<string, unknown> | undefined;
+  if (!tweet || typeof tweet.text !== "string") return null;
+  return tweet;
 }
 
 async function fetchXOembed(
@@ -772,15 +869,16 @@ async function fetchXOembed(
   bindings: VideoFetchBindings,
 ): Promise<OembedResult & { hasVideo: boolean; responded: boolean }> {
   const endpoint = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true&hide_thread=true`;
+  const requestInit: RequestInit = {
+    headers: { Accept: "application/json" },
+  };
 
   try {
-    let { response: res, layer } = await proxiedFetch(endpoint, bindings, {
-      init: { headers: { Accept: "application/json" } },
-    });
-    if (!res.ok && layer === "direct") {
+    let { response: res, layer } = await proxiedFetch(endpoint, bindings, { init: requestInit });
+    if (!res.ok && (isHttpBlocked(res.status) || res.status >= 500) && layer === "direct") {
       const retry = await proxiedFetch(endpoint, bindings, {
         forceProxy: true,
-        init: { headers: { Accept: "application/json" } },
+        init: requestInit,
       });
       res = retry.response;
     }
@@ -807,37 +905,23 @@ async function fetchXVideoMetadata(
   bindings: VideoFetchBindings,
 ): Promise<VideoMetadata> {
   const syndication = await fetchXSyndication(videoId, bindings);
-
   if (syndication) {
     if (!tweetHasVideo(syndication)) {
       throw new Error(X_NO_VIDEO_MESSAGE);
     }
+    return buildXVideoMetadata(videoId, normalizedUrl, parseXSyndicationResponse(syndication));
+  }
 
-    const parsed = parseXSyndicationResponse(syndication);
-    if (!parsed.description.trim()) {
-      throw new Error(X_EMPTY_MESSAGE);
+  const fxTweet = await fetchFxTwitter(videoId, bindings);
+  if (fxTweet) {
+    if (!fxTwitterHasVideo(fxTweet)) {
+      throw new Error(X_NO_VIDEO_MESSAGE);
     }
-
-    return {
-      platform: "x",
-      videoId,
-      normalizedUrl,
-      title: parsed.title,
-      description: parsed.description,
-      thumbnail: parsed.thumbnail,
-      author: parsed.author,
-      authorUrl: parsed.authorUrl,
-      platformAccount: parsed.platformAccount,
-      publishedAt: parsed.publishedAt,
-    };
+    return buildXVideoMetadata(videoId, normalizedUrl, parseFxTwitterResponse(fxTweet));
   }
 
   const oembed = await fetchXOembed(normalizedUrl, bindings);
-  if (oembed.hasVideo) {
-    if (!oembed.description?.trim()) {
-      throw new Error(X_EMPTY_MESSAGE);
-    }
-
+  if (oembed.hasVideo && oembed.description?.trim()) {
     return {
       platform: "x",
       videoId,
@@ -853,10 +937,6 @@ async function fetchXVideoMetadata(
       }),
       publishedAt: null,
     };
-  }
-
-  if (oembed.responded) {
-    throw new Error(X_NO_VIDEO_MESSAGE);
   }
 
   throw new Error(X_READ_FAILED_MESSAGE);
