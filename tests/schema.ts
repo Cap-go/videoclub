@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS startups (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   removed_at TEXT,
   removal_reason TEXT,
-  last_notified_rank INTEGER
+  last_notified_rank INTEGER,
+  click_count INTEGER NOT NULL DEFAULT 0,
+  play_count INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS videos (
@@ -27,7 +29,8 @@ CREATE TABLE IF NOT EXISTS videos (
   product_url_found TEXT NOT NULL,
   published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  removed_at TEXT
+  removed_at TEXT,
+  play_count INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_platform_video_id ON videos(platform, video_id);

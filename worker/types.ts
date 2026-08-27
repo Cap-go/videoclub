@@ -25,6 +25,8 @@ export interface StartupRow {
   removed_at: string | null;
   removal_reason: string | null;
   last_notified_rank: number | null;
+  click_count: number;
+  play_count: number;
 }
 
 export interface VideoRow {
@@ -42,6 +44,7 @@ export interface VideoRow {
   published_at: string | null;
   created_at: string;
   removed_at: string | null;
+  play_count: number;
 }
 
 export interface LeaderboardEntry {
@@ -52,6 +55,13 @@ export interface LeaderboardEntry {
   product_host: string;
   video_count: number;
   first_video_at: string;
+  click_count: number;
+  play_count: number;
+}
+
+export interface SiteStats {
+  total_clicks: number;
+  total_plays: number;
 }
 
 export interface FeedVideoEntry {
@@ -70,6 +80,9 @@ export interface FeedVideoEntry {
   startup_host: string;
   startup_rank: number | null;
   challenge_count: number;
+  play_count: number;
+  startup_click_count: number;
+  startup_play_count: number;
 }
 
 export interface VideoMetadata {

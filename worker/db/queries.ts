@@ -1,4 +1,4 @@
-import type { BoardPeriod, FeedVideoEntry, LeaderboardEntry, StartupRow, VideoRow } from "../types";
+import type { BoardPeriod, FeedVideoEntry, LeaderboardEntry, SiteStats, StartupRow, VideoRow } from "../types";
 import { resolvePlatformAccount } from "../lib/platform-account";
 
 export interface RankedStartup {
@@ -47,6 +47,8 @@ export async function getLeaderboard(
         s.name,
         s.product_url,
         s.product_host,
+        s.click_count,
+        s.play_count,
         COUNT(v.id) AS video_count,
         MIN(COALESCE(v.published_at, v.created_at)) AS first_video_at
       FROM startups s
@@ -73,8 +75,69 @@ export async function getLeaderboard(
   return rows.map((row) => ({
     ...row,
     video_count: Number(row.video_count),
+    click_count: Number(row.click_count),
+    play_count: Number(row.play_count),
     rank: rankMap.get(row.id) ?? 0,
   }));
+}
+
+export async function getSiteStats(db: D1Database): Promise<SiteStats> {
+  const row = await db
+    .prepare(
+      `SELECT
+        COALESCE(SUM(click_count), 0) AS total_clicks,
+        COALESCE(SUM(play_count), 0) AS total_plays
+       FROM startups
+       WHERE removed_at IS NULL`,
+    )
+    .first<{ total_clicks: number; total_plays: number }>();
+
+  return {
+    total_clicks: Number(row?.total_clicks ?? 0),
+    total_plays: Number(row?.total_plays ?? 0),
+  };
+}
+
+export async function incrementStartupClick(
+  db: D1Database,
+  startupId: number,
+): Promise<{ click_count: number } | null> {
+  const startup = await getStartupById(db, startupId);
+  if (!startup || startup.removed_at) return null;
+
+  await db
+    .prepare("UPDATE startups SET click_count = click_count + 1 WHERE id = ?")
+    .bind(startupId)
+    .run();
+
+  const updated = await getStartupById(db, startupId);
+  if (!updated) return null;
+  return { click_count: updated.click_count };
+}
+
+export async function incrementVideoPlay(
+  db: D1Database,
+  videoId: number,
+): Promise<{ play_count: number; startup_play_count: number } | null> {
+  const video = await getVideoById(db, videoId);
+  if (!video || video.removed_at) return null;
+
+  const startup = await getStartupById(db, video.startup_id);
+  if (!startup || startup.removed_at) return null;
+
+  await db.batch([
+    db.prepare("UPDATE videos SET play_count = play_count + 1 WHERE id = ?").bind(videoId),
+    db.prepare("UPDATE startups SET play_count = play_count + 1 WHERE id = ?").bind(video.startup_id),
+  ]);
+
+  const updatedVideo = await getVideoById(db, videoId);
+  const updatedStartup = await getStartupById(db, video.startup_id);
+  if (!updatedVideo || !updatedStartup) return null;
+
+  return {
+    play_count: updatedVideo.play_count,
+    startup_play_count: updatedStartup.play_count,
+  };
 }
 
 export async function getChallengeCount(db: D1Database, videoId: number): Promise<number> {
@@ -248,9 +311,12 @@ export async function getFeedVideos(
         v.published_at,
         v.created_at,
         v.product_url_found AS product_url,
+        v.play_count,
         s.id AS startup_id,
         s.name AS startup_name,
         s.product_host AS startup_host,
+        s.click_count AS startup_click_count,
+        s.play_count AS startup_play_count,
         (SELECT COUNT(*) FROM challenges c WHERE c.video_id = v.id) AS challenge_count
       FROM videos v
       JOIN startups s ON s.id = v.startup_id
@@ -268,6 +334,9 @@ export async function getFeedVideos(
   return (result.results ?? []).map((row) => ({
     ...row,
     challenge_count: Number(row.challenge_count),
+    play_count: Number(row.play_count),
+    startup_click_count: Number(row.startup_click_count),
+    startup_play_count: Number(row.startup_play_count),
     startup_rank: rankMap.get(row.startup_id) ?? null,
   }));
 }
