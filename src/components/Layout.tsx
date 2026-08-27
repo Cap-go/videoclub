@@ -23,9 +23,7 @@ export function Layout() {
       <header className="border-b border-[#e8e4df] bg-[#faf8f5]/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight sm:text-xl">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#111] text-sm text-white">
-              ▶
-            </span>
+            <img src="/logo.png" alt="" width={28} height={28} className="h-7 w-7 shrink-0" />
             videoclub.lol
           </Link>
 
