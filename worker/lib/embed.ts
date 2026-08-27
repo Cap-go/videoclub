@@ -32,6 +32,24 @@ export function youtubeEmbedUrl(videoId: string, origin = DEFAULT_SITE_ORIGIN): 
   return `https://www.youtube.com/embed/${videoId}?${params}`;
 }
 
+/** Centered shell for official X tweet embeds (no full-width 16:9 black frame). */
+export const X_EMBED_SHELL_CLASS =
+  "mx-auto w-full max-w-[550px] overflow-hidden rounded-xl bg-[#faf8f5]";
+
+/** Centered poster shell for X click-to-play (9:16 vertical videos). */
+export const X_EMBED_POSTER_SHELL_CLASS =
+  "mx-auto w-full max-w-[550px] overflow-hidden rounded-xl bg-black";
+
+/** Minimum iframe height for X tweet embeds (official column is ~550px wide). */
+export const X_EMBED_IFRAME_MIN_HEIGHT_PX = 600;
+
+export const X_EMBED_IFRAME_CLASS = "min-h-[600px] w-full border-0";
+
+/** Platforms that use the generic full-width aspect-video black iframe shell. */
+export function usesFullWidthAspectVideoBlackFrame(platform: string): boolean {
+  return platform !== "x" && platform !== "youtube";
+}
+
 /** Build YouTube, TikTok, Instagram, or X embed URLs for the public feed. */
 export function buildEmbedInfo(
   platform: VideoPlatform | string,

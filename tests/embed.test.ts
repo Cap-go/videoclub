@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildEmbedInfo, youtubeEmbedUrl, youtubePosterUrl } from "../worker/lib/embed";
+import {
+  buildEmbedInfo,
+  usesFullWidthAspectVideoBlackFrame,
+  X_EMBED_IFRAME_CLASS,
+  X_EMBED_SHELL_CLASS,
+  youtubeEmbedUrl,
+  youtubePosterUrl,
+} from "../worker/lib/embed";
 
 describe("embed URL builders", () => {
   it("builds official YouTube embed URLs", () => {
@@ -50,6 +57,17 @@ describe("embed URL builders", () => {
     expect(info.mode).toBe("iframe");
     expect(info.embedUrl).toBe("https://platform.twitter.com/embed/Tweet.html?id=1234567890123456789&dnt=true");
     expect(info.watchUrl).toBe("https://x.com/founder/status/1234567890123456789");
+  });
+
+  it("does not use full-width aspect-video black frame for X embeds", () => {
+    expect(usesFullWidthAspectVideoBlackFrame("x")).toBe(false);
+    expect(usesFullWidthAspectVideoBlackFrame("youtube")).toBe(false);
+    expect(usesFullWidthAspectVideoBlackFrame("tiktok")).toBe(true);
+    expect(X_EMBED_SHELL_CLASS).toContain("max-w-[550px]");
+    expect(X_EMBED_SHELL_CLASS).not.toContain("aspect-video");
+    expect(X_EMBED_SHELL_CLASS).not.toContain("bg-black");
+    expect(X_EMBED_IFRAME_CLASS).toContain("min-h-[600px]");
+    expect(X_EMBED_IFRAME_CLASS).not.toContain("absolute");
   });
 
   it("falls back for unknown platforms", () => {
