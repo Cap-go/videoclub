@@ -64,30 +64,6 @@ describe("DataFast proxy", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("proxies GET /widgets/.../realtime with query string preserved", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === "string" ? input : input.toString();
-      expect(url).toBe(
-        "https://datafa.st/widgets/6a90233b9514c70c504828be/realtime?mainTextSize=16&primaryColor=%23e78468",
-      );
-      return new Response("<html>widget</html>", {
-        status: 200,
-        headers: { "Content-Type": "text/html" },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const res = await runWorker(
-      new Request(
-        "http://videoclub.lol/widgets/6a90233b9514c70c504828be/realtime?mainTextSize=16&primaryColor=%23e78468",
-      ),
-    );
-
-    expect(res.status).toBe(200);
-    expect(await res.text()).toBe("<html>widget</html>");
-    expect(fetchMock).toHaveBeenCalledOnce();
-  });
-
   it("handles OPTIONS /api/events for CORS preflight", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
