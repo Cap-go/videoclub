@@ -21,5 +21,16 @@ describe("computeRanks", () => {
     ]);
 
     expect(ranked.map((r) => r.id)).toEqual([2, 3, 1]);
+    expect(ranked.map((r) => r.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("uses the oldest video when a startup has several", () => {
+    const ranked = computeRanks([
+      { id: 1, video_count: 2, first_video_at: "2024-06-01T00:00:00.000Z" },
+      { id: 2, video_count: 2, first_video_at: "2024-01-01T00:00:00.000Z" },
+    ]);
+
+    expect(ranked[0]?.id).toBe(2);
+    expect(ranked[0]?.rank).toBe(1);
   });
 });

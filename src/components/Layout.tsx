@@ -77,7 +77,7 @@ export function Layout() {
       </main>
 
       <footer className="border-t border-[#e8e4df] px-4 py-8 text-center text-sm text-[#6b7280]">
-        <p className="font-medium text-[#111]">Rank is the videos — nothing else.</p>
+        <p className="font-medium text-[#111]">Rank is the videos. Same count — older oldest video wins.</p>
         <p className="mt-2 text-xs">
           Made by{" "}
           <a

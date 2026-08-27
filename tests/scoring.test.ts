@@ -38,6 +38,7 @@ describe("today vs all-time boards", () => {
     expect(board.find((e) => e.id === 1)?.video_count).toBe(2);
     expect(board.find((e) => e.id === 2)?.video_count).toBe(2);
     expect(board[0]?.id).toBe(1);
+    expect(board.map((e) => e.rank)).toEqual([1, 2]);
   });
 
   it("today only counts recently published or unknown-publish submissions", async () => {
@@ -45,5 +46,38 @@ describe("today vs all-time boards", () => {
     expect(board.find((e) => e.id === 1)).toBeUndefined();
     expect(board.find((e) => e.id === 2)?.video_count).toBe(2);
     expect(board[0]?.id).toBe(2);
+    expect(board.map((e) => e.rank)).toEqual([1]);
+  });
+
+  it("today tie-breaks by oldest among today-counted videos", async () => {
+    await env.DB.prepare("DELETE FROM videos").run();
+    await env.DB.prepare("DELETE FROM startups").run();
+
+    await env.DB.prepare(
+      `INSERT INTO startups (id, product_url, product_host, name, email, created_at)
+       VALUES
+         (1, 'https://a.io', 'a.io', 'A', 'a@test.com', '2026-01-01T00:00:00.000Z'),
+         (2, 'https://b.io', 'b.io', 'B', 'b@test.com', '2026-01-01T00:00:00.000Z')`,
+    ).run();
+
+    const recent = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const aOldest = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    const bOldest = new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString();
+
+    await env.DB.prepare(
+      `INSERT INTO videos (id, startup_id, video_url, video_id, platform, title, description, product_url_found, published_at, created_at)
+       VALUES
+         (1, 1, 'https://youtube.com/watch?v=a1', 'a1', 'youtube', 'A1', 'https://a.io', 'https://a.io', ?, ?),
+         (2, 1, 'https://youtube.com/watch?v=a2', 'a2', 'youtube', 'A2', 'https://a.io', 'https://a.io', ?, ?),
+         (3, 2, 'https://youtube.com/watch?v=b1', 'b1', 'youtube', 'B1', 'https://b.io', 'https://b.io', ?, ?),
+         (4, 2, 'https://youtube.com/watch?v=b2', 'b2', 'youtube', 'B2', 'https://b.io', 'https://b.io', ?, ?)`,
+    )
+      .bind(recent, recent, aOldest, recent, recent, recent, bOldest, recent)
+      .run();
+
+    const board = await getLeaderboard(env.DB, "today");
+    expect(board.map((e) => e.id)).toEqual([2, 1]);
+    expect(board.map((e) => e.rank)).toEqual([1, 2]);
+    expect(board[0]?.first_video_at).toBe(bOldest);
   });
 });

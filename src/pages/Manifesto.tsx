@@ -65,8 +65,8 @@ export function Manifesto() {
             Video Club exists to push founders to post more real videos of themselves. That&apos;s it.
           </p>
           <p>
-            Rank is the count. Nothing else. No ads. No algorithm. No pay-to-win. How many videos did you
-            actually post about your product? That number is your place on the board.
+            Rank is the count. Same count, older oldest video wins. No ads. No algorithm. No pay-to-win. How
+            many videos did you actually post about your product? That number is your place on the board.
           </p>
         </div>
       </section>

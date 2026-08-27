@@ -64,7 +64,8 @@ export function HowItWorksModal({ open, onClose }: HowItWorksModalProps) {
           </li>
           <li>
             The leaderboard ranks <strong className="font-semibold text-[#111]">products</strong> by how many
-            legit founder videos mention them. That&apos;s why you see SaaS icons, not channel avatars.
+            legit founder videos mention them. Same count? Oldest video wins. That&apos;s why you see SaaS
+            icons, not channel avatars.
           </li>
           <li>
             On X, if there&apos;s no URL in the tweet, a tagged business account counts — we use that
