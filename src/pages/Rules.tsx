@@ -3,7 +3,10 @@ export function Rules() {
     <article className="mx-auto max-w-2xl space-y-10">
       <header className="space-y-3">
         <h1 className="text-4xl font-bold tracking-tight text-[#111] sm:text-5xl">Rules</h1>
-        <p className="text-lg font-semibold text-[#111]">Rank is the video count. Nothing else.</p>
+        <p className="text-lg font-semibold text-[#111]">
+          Rank is the video count. Same count: the startup whose oldest video is older sits higher. Several
+          videos — we use the oldest one.
+        </p>
       </header>
 
       <section className="space-y-3">
@@ -19,6 +22,10 @@ export function Rules() {
             two platforms is two videos.
           </li>
           <li>First time your startup hits the board, we take an email so we can tell you when rank changes.</li>
+          <li>
+            Same video count? Older oldest video wins. Publish date when we have it; submit time if we
+            don&apos;t.
+          </li>
         </ul>
       </section>
 
@@ -55,7 +62,8 @@ export function Rules() {
         <p className="leading-relaxed text-[#374151]">
           <strong>All-time</strong> counts every valid video, including your back catalog.{" "}
           <strong>Today</strong> only counts videos published in the last 24 hours (or submitted today if we
-          cannot read the publish date).
+          cannot read the publish date). Tie on count? Oldest among those counted videos wins — on Today,
+          that means oldest among today&apos;s videos only.
         </p>
       </section>
 

@@ -20,7 +20,7 @@ export function emailShell(title: string, body: string, boardUrl: string): strin
   <div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e8e4df;border-radius:16px;overflow:hidden;">
     <div style="padding:20px 24px;border-bottom:1px solid #e8e4df;background:${BG};">
       <div style="font-size:18px;font-weight:700;">▶ videoclub.lol</div>
-      <div style="font-size:13px;color:${MUTED};margin-top:4px;">Rank is the videos — nothing else.</div>
+      <div style="font-size:13px;color:${MUTED};margin-top:4px;">Rank is the videos. Same count — older oldest video wins.</div>
     </div>
     <div style="padding:24px;">
       ${body}

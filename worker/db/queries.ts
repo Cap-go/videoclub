@@ -71,14 +71,18 @@ export async function getLeaderboard(
     })),
   );
 
-  const rankMap = new Map(ranked.map((r) => [r.id, r.rank]));
-  return rows.map((row) => ({
-    ...row,
-    video_count: Number(row.video_count),
-    click_count: Number(row.click_count),
-    play_count: Number(row.play_count),
-    rank: rankMap.get(row.id) ?? 0,
-  }));
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+
+  return ranked.map((r) => {
+    const row = rowById.get(r.id)!;
+    return {
+      ...row,
+      video_count: r.video_count,
+      click_count: Number(row.click_count),
+      play_count: Number(row.play_count),
+      rank: r.rank,
+    };
+  });
 }
 
 export async function getSiteStats(db: D1Database): Promise<SiteStats> {

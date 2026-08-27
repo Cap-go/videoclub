@@ -352,7 +352,9 @@ export function Home() {
             </ul>
           </div>
           <div className="rounded-2xl border border-[#fcd4c4] bg-[#fff9f7] p-4">
-            <p className="text-sm font-semibold text-[#111]">Rank is the videos — nothing else.</p>
+            <p className="text-sm font-semibold text-[#111]">
+              Rank is the videos. Same count — older oldest video wins.
+            </p>
             <p className="mt-2 text-sm text-[#6b7280]">
               Legitimacy is crowd-judged. Challenge fake videos — three challenges removes a startup.
             </p>
