@@ -5,11 +5,13 @@ import {
   getStartupById,
   getStartupRank,
   getVideoById,
+  getVideoByPlatformId,
   getVideosForStartup,
 } from "../db/queries";
 import { notifyRankChange, sendEmail } from "../lib/email";
 import { rateLimitReport, rateLimitSubmit } from "../lib/rate-limit";
 import {
+  DUPLICATE_VIDEO_MESSAGE,
   extractProductUrl,
   hashIp,
   hostToName,
@@ -18,7 +20,7 @@ import {
   normalizeProductUrl,
 } from "../lib/urls";
 import { fetchVideoMetadata } from "../lib/video";
-import type { Env } from "../types";
+import type { BoardPeriod, Env } from "../types";
 
 export const api = new Hono<{ Bindings: Env }>();
 
@@ -30,9 +32,14 @@ function clientIp(c: { req: { header: (name: string) => string | undefined } }):
   );
 }
 
+function parsePeriod(value: string | undefined): BoardPeriod {
+  return value === "today" ? "today" : "all";
+}
+
 api.get("/leaderboard", async (c) => {
-  const entries = await getLeaderboard(c.env.DB);
-  return c.json({ entries });
+  const period = parsePeriod(c.req.query("period"));
+  const entries = await getLeaderboard(c.env.DB, period);
+  return c.json({ period, entries });
 });
 
 api.get("/startups/:id/videos", async (c) => {
@@ -58,7 +65,8 @@ api.get("/startups/:id/videos", async (c) => {
       platform: v.platform,
       title: v.title,
       thumbnail: v.thumbnail,
-      created_at: v.created_at,
+      published_at: v.published_at,
+      submitted_at: v.created_at,
     })),
   });
 });
@@ -70,6 +78,17 @@ api.post("/check", async (c) => {
 
   try {
     const metadata = await fetchVideoMetadata(videoUrl);
+
+    const existingVideo = await getVideoByPlatformId(c.env.DB, metadata.platform, metadata.videoId);
+    if (existingVideo) {
+      return c.json({
+        emailRequired: false,
+        productFound: false,
+        duplicate: true,
+        error: DUPLICATE_VIDEO_MESSAGE,
+      });
+    }
+
     const productUrl = extractProductUrl(metadata.description);
     if (!productUrl) {
       return c.json({
@@ -93,6 +112,7 @@ api.post("/check", async (c) => {
       productUrl,
       productHost,
       startupName: hostToName(productHost),
+      publishedAt: metadata.publishedAt,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not read video";
@@ -127,13 +147,9 @@ api.post("/submit", async (c) => {
     return c.json({ error: message }, 400);
   }
 
-  const existingVideo = await c.env.DB
-    .prepare("SELECT id, removed_at FROM videos WHERE video_url = ?")
-    .bind(metadata.normalizedUrl)
-    .first<{ id: number; removed_at: string | null }>();
-
-  if (existingVideo && !existingVideo.removed_at) {
-    return c.json({ error: "This video has already been submitted." }, 409);
+  const existingVideo = await getVideoByPlatformId(c.env.DB, metadata.platform, metadata.videoId);
+  if (existingVideo) {
+    return c.json({ error: DUPLICATE_VIDEO_MESSAGE }, 409);
   }
 
   const productUrlFound = extractProductUrl(metadata.description);
@@ -194,46 +210,27 @@ api.post("/submit", async (c) => {
     startupId = startup!.id;
   }
 
-  if (existingVideo?.removed_at) {
-    await c.env.DB.prepare(
-      `UPDATE videos SET
-        startup_id = ?, platform = ?, title = ?, description = ?, thumbnail = ?, author = ?,
-        product_url_found = ?, created_at = ?, removed_at = NULL
-       WHERE id = ?`,
+  await c.env.DB.prepare(
+    `INSERT INTO videos
+      (startup_id, video_url, video_id, platform, title, description, thumbnail, author, product_url_found, published_at, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      startupId,
+      metadata.normalizedUrl,
+      metadata.videoId,
+      metadata.platform,
+      metadata.title,
+      metadata.description,
+      metadata.thumbnail,
+      metadata.author,
+      normalizedProductUrl,
+      metadata.publishedAt,
+      now,
     )
-      .bind(
-        startupId,
-        metadata.platform,
-        metadata.title,
-        metadata.description,
-        metadata.thumbnail,
-        metadata.author,
-        normalizedProductUrl,
-        now,
-        existingVideo.id,
-      )
-      .run();
-  } else {
-    await c.env.DB.prepare(
-      `INSERT INTO videos
-        (startup_id, video_url, platform, title, description, thumbnail, author, product_url_found, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        startupId,
-        metadata.normalizedUrl,
-        metadata.platform,
-        metadata.title,
-        metadata.description,
-        metadata.thumbnail,
-        metadata.author,
-        normalizedProductUrl,
-        now,
-      )
-      .run();
-  }
+    .run();
 
-  const rank = (await getStartupRank(c.env.DB, startupId)) ?? 1;
+  const rank = (await getStartupRank(c.env.DB, startupId, "all")) ?? 1;
   const freshStartup = await getStartupById(c.env.DB, startupId);
 
   c.executionCtx.waitUntil(
@@ -255,7 +252,7 @@ api.post("/submit", async (c) => {
         await notifyRankChange(c.env, c.env.DB, freshStartup, rank);
       }
 
-      const board = await getLeaderboard(c.env.DB);
+      const board = await getLeaderboard(c.env.DB, "all");
       for (const entry of board) {
         if (entry.id === startupId) continue;
         const other = await getStartupById(c.env.DB, entry.id);
@@ -276,6 +273,7 @@ api.post("/submit", async (c) => {
       title: metadata.title,
       platform: metadata.platform,
       url: metadata.normalizedUrl,
+      publishedAt: metadata.publishedAt,
     },
   });
 });
@@ -327,7 +325,7 @@ api.post("/report/:videoId", async (c) => {
         videoTitle: video.title,
       });
 
-      const board = await getLeaderboard(c.env.DB);
+      const board = await getLeaderboard(c.env.DB, "all");
       for (const entry of board) {
         const other = await getStartupById(c.env.DB, entry.id);
         if (other) await notifyRankChange(c.env, c.env.DB, other, entry.rank);

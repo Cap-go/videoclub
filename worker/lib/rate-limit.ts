@@ -1,5 +1,5 @@
 const WINDOW_MS = 60 * 60 * 1000;
-const SUBMIT_LIMIT = 10;
+const SUBMIT_LIMIT = 20;
 const REPORT_LIMIT = 20;
 
 export async function checkRateLimit(

@@ -10,7 +10,18 @@ export function timeAgo(iso: string): string {
   if (days < 30) return `${days} days ago`;
   const months = Math.floor(days / 30);
   if (months === 1) return "1 month ago";
-  return `${months} months ago`;
+  if (months < 12) return `${months} months ago`;
+  const years = Math.floor(months / 12);
+  if (years === 1) return "1 year ago";
+  return `${years} years ago`;
+}
+
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 export function platformLabel(platform: string): string {

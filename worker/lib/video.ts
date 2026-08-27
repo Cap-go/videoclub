@@ -1,5 +1,5 @@
 import type { VideoMetadata } from "../types";
-import { detectPlatform, normalizeVideoUrl, type VideoPlatform } from "./urls";
+import { detectPlatform, extractPlatformVideoId, normalizeVideoUrl, type VideoPlatform } from "./urls";
 
 const USER_AGENT =
   "Mozilla/5.0 (compatible; VideoClubBot/1.0; +https://videoclub.lol)";
@@ -10,13 +10,24 @@ export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadat
     throw new Error("Only YouTube, TikTok, and Instagram video URLs are supported.");
   }
 
+  const videoId = extractPlatformVideoId(videoUrl, platform);
+  if (!videoId) {
+    throw new Error("Could not parse a video id from that URL.");
+  }
+
   const normalizedUrl = normalizeVideoUrl(videoUrl, platform);
   const oembed = await fetchOembed(normalizedUrl, platform);
   let noembed: OembedResult = {};
   let description = oembed.description ?? "";
+  let publishedAt: string | null = null;
 
   if (!description.trim()) {
-    description = await fetchDescriptionFromPage(normalizedUrl, platform);
+    const page = await fetchPageDetails(normalizedUrl, platform);
+    description = page.description;
+    publishedAt = page.publishedAt;
+  } else {
+    const page = await fetchPageDetails(normalizedUrl, platform);
+    publishedAt = page.publishedAt;
   }
 
   if (!description.trim()) {
@@ -32,10 +43,12 @@ export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadat
 
   return {
     platform,
+    videoId,
     title: oembed.title || noembed.title || "Untitled video",
     description,
     thumbnail: oembed.thumbnail ?? noembed.thumbnail ?? null,
     author: oembed.author ?? noembed.author ?? null,
+    publishedAt,
     normalizedUrl,
   };
 }
@@ -94,7 +107,10 @@ async function fetchNoembed(url: string): Promise<OembedResult> {
   }
 }
 
-async function fetchDescriptionFromPage(url: string, platform: VideoPlatform): Promise<string> {
+async function fetchPageDetails(
+  url: string,
+  platform: VideoPlatform,
+): Promise<{ description: string; publishedAt: string | null }> {
   const res = await fetch(url, {
     headers: {
       "User-Agent": USER_AGENT,
@@ -103,16 +119,12 @@ async function fetchDescriptionFromPage(url: string, platform: VideoPlatform): P
     },
     redirect: "follow",
   });
-  if (!res.ok) return "";
+  if (!res.ok) return { description: "", publishedAt: null };
   const html = await res.text();
-
-  if (platform === "youtube") {
-    return extractYouTubeDescription(html);
-  }
-  if (platform === "tiktok") {
-    return extractTikTokDescription(html);
-  }
-  return extractMetaDescription(html) ?? extractJsonDescription(html, ["caption", "description", "text"]);
+  return {
+    description: parseDescriptionFromHtml(html, platform),
+    publishedAt: parsePublishedAtFromHtml(html, platform),
+  };
 }
 
 function extractYouTubeDescription(html: string): string {
@@ -212,5 +224,35 @@ function decodeHtmlEntities(input: string): string {
 export function parseDescriptionFromHtml(html: string, platform: VideoPlatform): string {
   if (platform === "youtube") return extractYouTubeDescription(html);
   if (platform === "tiktok") return extractTikTokDescription(html);
-  return extractMetaDescription(html) ?? "";
+  return extractMetaDescription(html) ?? extractJsonDescription(html, ["caption", "description", "text"]);
+}
+
+/** Test helper: parse publish date without network */
+export function parsePublishedAtFromHtml(html: string, platform: VideoPlatform): string | null {
+  if (platform === "youtube") {
+    const upload = html.match(/"uploadDate"\s*:\s*"([^"]+)"/);
+    if (upload?.[1]) return normalizePublishedAt(upload[1]);
+    const published = html.match(/"datePublished"\s*:\s*"([^"]+)"/);
+    if (published?.[1]) return normalizePublishedAt(published[1]);
+    const item = html.match(/itemprop="datePublished"\s+content="([^"]+)"/);
+    if (item?.[1]) return normalizePublishedAt(item[1]);
+  }
+
+  if (platform === "tiktok") {
+    const epoch = html.match(/"createTime"\s*:\s*"?(\d{10})"?/);
+    if (epoch?.[1]) return new Date(Number(epoch[1]) * 1000).toISOString();
+  }
+
+  if (platform === "instagram") {
+    const epoch = html.match(/"taken_at_timestamp"\s*:\s*(\d{10})/);
+    if (epoch?.[1]) return new Date(Number(epoch[1]) * 1000).toISOString();
+  }
+
+  return null;
+}
+
+function normalizePublishedAt(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toISOString();
 }

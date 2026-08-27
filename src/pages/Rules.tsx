@@ -10,49 +10,78 @@ export function Rules() {
         <h2 className="text-xl font-bold text-[#111]">How ranking works</h2>
         <p className="leading-relaxed text-[#374151]">
           <strong>Rank is the videos — nothing else.</strong> More valid founder videos about your product =
-          higher rank. Tie-break: whoever posted their first video earlier keeps the higher spot.
+          higher rank. Tie-break: whoever got on the board first wins the higher spot.
         </p>
         <p className="leading-relaxed text-[#374151]">
           Out-publish everyone to rank #1 — that&apos;s it. Posting fewer than #1 still puts you on the board
           at whatever place that count can take.
         </p>
+        <p className="leading-relaxed text-[#374151]">
+          <strong>All-time</strong> is the main board — every valid video counts, including old ones.
+          <strong> Today</strong> only counts videos published in the last 24 hours (so dumping 200 old
+          videos doesn&apos;t bury someone who actually posted fresh content today).
+        </p>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#111]">What you can post</h2>
+        <h2 className="text-xl font-bold text-[#111]">Old videos count</h2>
+        <p className="leading-relaxed text-[#374151]">
+          No recency requirement on All-time. A video from 2019 is valid if the description{" "}
+          <em>currently</em> contains your product URL. Edit an old description, add the link, submit it.
+          We show the real publish date when we can — the board stays honest about age — but we never score
+          by age.
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-xl font-bold text-[#111]">Same video never counts twice</h2>
+        <p className="leading-relaxed text-[#374151]">
+          We dedupe by platform video id, not the URL you paste.{" "}
+          <code className="rounded bg-[#f3f4f6] px-1">youtube.com/watch?v=X</code>,{" "}
+          <code className="rounded bg-[#f3f4f6] px-1">youtu.be/X</code>, Shorts, and{" "}
+          <code className="rounded bg-[#f3f4f6] px-1">?si=</code> tracking junk are one video. Same for
+          TikTok ids and Instagram shortcodes.
+        </p>
+        <p className="leading-relaxed text-[#374151]">
+          Submit the same video twice? Rejected — even from a different person, even with a different product
+          URL. Attribution is locked to whatever product link is in <em>that</em> video&apos;s description.
+          You can&apos;t steal someone else&apos;s clip onto your startup.
+        </p>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-xl font-bold text-[#111]">What&apos;s fair</h2>
         <ul className="list-disc space-y-2 pl-5 leading-relaxed text-[#374151]">
-          <li>YouTube, TikTok, or Instagram video URLs only</li>
-          <li>Founder on camera — human, not AI slop</li>
-          <li>Product URL in the video description (not YouTube/TikTok/Instagram links)</li>
+          <li>Dump your back catalog. That&apos;s the point.</li>
+          <li>
+            Same talk on YouTube <em>and</em> TikTok <em>and</em> Instagram = 3 videos. Different platforms,
+            different posts.
+          </li>
+          <li>Add your product link to an old description, then submit. Allowed.</li>
+          <li>~20 submits per hour per IP — enough to batch-upload, not enough to spam the planet.</li>
         </ul>
-        <p className="leading-relaxed text-[#374151]">
-          No product link in the description? Rejected. We can&apos;t read the description? Rejected.
-        </p>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#111]">Email</h2>
-        <p className="leading-relaxed text-[#374151]">
-          First time a new startup (product domain) hits the board, we need your email. More videos for the
-          same startup? No email again.
-        </p>
+        <h2 className="text-xl font-bold text-[#111]">What we don&apos;t do</h2>
+        <ul className="list-disc space-y-2 pl-5 leading-relaxed text-[#374151]">
+          <li>No video fingerprinting or perceptual hash. Re-uploads as a new id are allowed — Report AI is the escape hatch.</li>
+          <li>No NLP &quot;is this really about your product?&quot; gate. Product link in the description is enough.</li>
+          <li>No blocking old videos. No score decay. No minimum duration.</li>
+          <li>No accounts. No login. No ads. No API keys.</li>
+        </ul>
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#111]">Reports</h2>
+        <h2 className="text-xl font-bold text-[#111]">Reports & email</h2>
         <p className="leading-relaxed text-[#374151]">
-          Anyone can report a video as AI. <strong>One report removes that video and the entire startup</strong>{" "}
-          from the board. The founder gets emailed why.
+          Anyone can report a video as AI. One report removes that video <em>and</em> the entire startup from
+          the board. Founder gets emailed.
         </p>
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="text-xl font-bold text-[#111]">After you post</h2>
         <p className="leading-relaxed text-[#374151]">
-          Rank changes? You get an email. First time on the board? Welcome email with your rank. Removed?
-          Email with the reported video.
+          First time your startup hits the board? Email required once. Rank moves on All-time? Email. Removed?
+          Email.
         </p>
-        <p className="leading-relaxed text-[#374151]">No ads. No API keys. No login.</p>
       </section>
     </article>
   );

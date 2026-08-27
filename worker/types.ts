@@ -6,6 +6,8 @@ export interface Env {
   RESEND_API_KEY?: string;
 }
 
+export type BoardPeriod = "all" | "today";
+
 export interface StartupRow {
   id: number;
   product_url: string;
@@ -22,12 +24,14 @@ export interface VideoRow {
   id: number;
   startup_id: number;
   video_url: string;
+  video_id: string | null;
   platform: string;
   title: string;
   description: string;
   thumbnail: string | null;
   author: string | null;
   product_url_found: string;
+  published_at: string | null;
   created_at: string;
   removed_at: string | null;
 }
@@ -44,10 +48,12 @@ export interface LeaderboardEntry {
 
 export interface VideoMetadata {
   platform: "youtube" | "tiktok" | "instagram";
+  videoId: string;
   title: string;
   description: string;
   thumbnail: string | null;
   author: string | null;
+  publishedAt: string | null;
   normalizedUrl: string;
 }
 

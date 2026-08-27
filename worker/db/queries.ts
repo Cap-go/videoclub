@@ -1,4 +1,4 @@
-import type { LeaderboardEntry, StartupRow, VideoRow } from "../types";
+import type { BoardPeriod, LeaderboardEntry, StartupRow, VideoRow } from "../types";
 
 export interface RankedStartup {
   id: number;
@@ -23,7 +23,22 @@ export function computeRanks(
   }));
 }
 
-export async function getLeaderboard(db: D1Database): Promise<LeaderboardEntry[]> {
+/** Today board: platform publish in last 24h, or unknown publish + submitted in last 24h. */
+export function todayVideoSql(cutoffIso: string): string {
+  return `(v.published_at >= ? OR (v.published_at IS NULL AND v.created_at >= ?))`;
+}
+
+export function getBoardCutoffIso(): string {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+}
+
+export async function getLeaderboard(
+  db: D1Database,
+  period: BoardPeriod = "all",
+): Promise<LeaderboardEntry[]> {
+  const cutoff = getBoardCutoffIso();
+  const todayFilter = period === "today" ? `AND ${todayVideoSql(cutoff)}` : "";
+
   const result = await db
     .prepare(
       `SELECT
@@ -32,13 +47,16 @@ export async function getLeaderboard(db: D1Database): Promise<LeaderboardEntry[]
         s.product_url,
         s.product_host,
         COUNT(v.id) AS video_count,
-        MIN(v.created_at) AS first_video_at
+        MIN(COALESCE(v.published_at, v.created_at)) AS first_video_at
       FROM startups s
       JOIN videos v ON v.startup_id = s.id AND v.removed_at IS NULL
       WHERE s.removed_at IS NULL
+      ${todayFilter}
       GROUP BY s.id
+      HAVING video_count > 0
       ORDER BY video_count DESC, first_video_at ASC`,
     )
+    .bind(...(period === "today" ? [cutoff, cutoff] : []))
     .all<Omit<LeaderboardEntry, "rank">>();
 
   const rows = result.results ?? [];
@@ -58,8 +76,12 @@ export async function getLeaderboard(db: D1Database): Promise<LeaderboardEntry[]
   }));
 }
 
-export async function getStartupRank(db: D1Database, startupId: number): Promise<number | null> {
-  const board = await getLeaderboard(db);
+export async function getStartupRank(
+  db: D1Database,
+  startupId: number,
+  period: BoardPeriod = "all",
+): Promise<number | null> {
+  const board = await getLeaderboard(db, period);
   const entry = board.find((e) => e.id === startupId);
   return entry?.rank ?? null;
 }
@@ -98,8 +120,15 @@ export async function getVideosForStartup(db: D1Database, startupId: number): Pr
   return result.results ?? [];
 }
 
-export async function getVideoByUrl(db: D1Database, videoUrl: string): Promise<VideoRow | null> {
-  return db.prepare("SELECT * FROM videos WHERE video_url = ?").bind(videoUrl).first<VideoRow>();
+export async function getVideoByPlatformId(
+  db: D1Database,
+  platform: string,
+  videoId: string,
+): Promise<VideoRow | null> {
+  return db
+    .prepare("SELECT * FROM videos WHERE platform = ? AND video_id = ?")
+    .bind(platform, videoId)
+    .first<VideoRow>();
 }
 
 export async function getVideoById(db: D1Database, videoId: number): Promise<VideoRow | null> {

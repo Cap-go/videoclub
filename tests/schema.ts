@@ -14,16 +14,20 @@ CREATE TABLE IF NOT EXISTS startups (
 CREATE TABLE IF NOT EXISTS videos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   startup_id INTEGER NOT NULL REFERENCES startups(id),
-  video_url TEXT NOT NULL UNIQUE,
+  video_url TEXT NOT NULL,
+  video_id TEXT,
   platform TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   thumbnail TEXT,
   author TEXT,
   product_url_found TEXT NOT NULL,
+  published_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   removed_at TEXT
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_platform_video_id ON videos(platform, video_id);
 
 CREATE TABLE IF NOT EXISTS reports (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

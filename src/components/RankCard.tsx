@@ -1,5 +1,5 @@
 import { faviconUrl, type LeaderboardEntry, type StartupVideo } from "../lib/api";
-import { platformLabel, timeAgo } from "../lib/format";
+import { formatDate, platformLabel, timeAgo } from "../lib/format";
 
 interface RankCardProps {
   entry: LeaderboardEntry;
@@ -107,7 +107,11 @@ export function RankCard({
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold text-[#111]">{video.title}</div>
                     <div className="mt-1 text-xs text-[#9ca3af]">
-                      {platformLabel(video.platform)} · {timeAgo(video.created_at)}
+                      {platformLabel(video.platform)}
+                      {video.published_at && (
+                        <> · published {formatDate(video.published_at)}</>
+                      )}
+                      <> · submitted {timeAgo(video.submitted_at)}</>
                     </div>
                     <a
                       href={video.video_url}

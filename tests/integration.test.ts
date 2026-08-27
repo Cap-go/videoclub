@@ -26,9 +26,9 @@ describe("report removal and emails", () => {
     ).run();
 
     await env.DB.prepare(
-      `INSERT INTO videos (id, startup_id, video_url, platform, title, description, product_url_found, created_at)
-       VALUES (1, 1, 'https://youtube.com/watch?v=a1', 'youtube', 'Alpha v1', 'https://alpha.io', 'https://alpha.io', '2026-01-01T00:00:00.000Z'),
-              (2, 2, 'https://youtube.com/watch?v=b1', 'youtube', 'Beta v1', 'https://beta.io', 'https://beta.io', '2026-01-02T00:00:00.000Z')`,
+      `INSERT INTO videos (id, startup_id, video_url, video_id, platform, title, description, product_url_found, created_at)
+       VALUES (1, 1, 'https://youtube.com/watch?v=a1', 'a1', 'youtube', 'Alpha v1', 'https://alpha.io', 'https://alpha.io', '2026-01-01T00:00:00.000Z'),
+              (2, 2, 'https://youtube.com/watch?v=b1', 'b1', 'youtube', 'Beta v1', 'https://beta.io', 'https://beta.io', '2026-01-02T00:00:00.000Z')`,
     ).run();
   });
 
@@ -177,6 +177,51 @@ describe("submit email triggers", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects duplicate platform video id across URL variants", async () => {
+    await env.DB.prepare(
+      `INSERT INTO startups (id, product_url, product_host, name, email, created_at)
+       VALUES (3, 'https://taken.io', 'taken.io', 'Taken', 'taken@test.com', datetime('now'))`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO videos (startup_id, video_url, video_id, platform, title, description, product_url_found, created_at)
+       VALUES (3, 'https://youtube.com/watch?v=dup99', 'dup99', 'youtube', 'Existing', 'https://taken.io', 'https://taken.io', datetime('now'))`,
+    ).run();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("noembed.com") || url.includes("youtube.com/oembed")) {
+          return new Response(
+            JSON.stringify({
+              title: "Steal attempt",
+              description: "My product https://other.io",
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response("<html></html>", { status: 200 });
+      }),
+    );
+
+    const res = await runWorker(
+      new Request("http://example.com/api/submit", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": "7.7.7.7", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: "https://youtu.be/dup99?si=tracking",
+          email: "hacker@other.io",
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("already on Video Club");
 
     vi.unstubAllGlobals();
   });

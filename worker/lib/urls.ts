@@ -39,8 +39,7 @@ export function normalizeProductUrl(input: string): string | null {
   }
 }
 
-const URL_REGEX =
-  /https?:\/\/[^\s<>"')\]}]+/gi;
+const URL_REGEX = /https?:\/\/[^\s<>"')\]}]+/gi;
 
 function cleanUrl(raw: string): string {
   return raw.replace(/[.,;:!?)}\]]+$/g, "");
@@ -85,18 +84,64 @@ export function detectPlatform(url: string): VideoPlatform | null {
   }
 }
 
+/** Canonical platform video id — dedup key across URL variants. */
+export function extractPlatformVideoId(url: string, platform: VideoPlatform): string | null {
+  try {
+    const parsed = new URL(url);
+    if (platform === "youtube") {
+      const shorts = parsed.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+      if (shorts?.[1]) return shorts[1];
+
+      const embed = parsed.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+      if (embed?.[1]) return embed[1];
+
+      const v = parsed.searchParams.get("v");
+      if (v) return v;
+
+      if (parsed.hostname.replace(/^www\./, "").includes("youtu.be")) {
+        const id = parsed.pathname.slice(1).split("/")[0]?.split("?")[0];
+        if (id) return id;
+      }
+      return null;
+    }
+
+    if (platform === "tiktok") {
+      const match = parsed.pathname.match(/\/video\/(\d+)/);
+      return match?.[1] ?? null;
+    }
+
+    if (platform === "instagram") {
+      const match = parsed.pathname.match(/\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);
+      return match?.[1] ?? null;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function normalizeVideoUrl(url: string, platform: VideoPlatform): string {
+  const videoId = extractPlatformVideoId(url, platform);
+  if (platform === "youtube" && videoId) {
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  }
+  if (platform === "tiktok" && videoId) {
+    const parsed = new URL(url);
+    const userMatch = parsed.pathname.match(/^\/@([^/]+)\/video\//);
+    if (userMatch?.[1]) {
+      return `https://www.tiktok.com/@${userMatch[1]}/video/${videoId}`;
+    }
+    return `https://www.tiktok.com/video/${videoId}`;
+  }
+  if (platform === "instagram" && videoId) {
+    const parsed = new URL(url);
+    const kind = parsed.pathname.includes("/p/") ? "p" : "reel";
+    return `https://www.instagram.com/${kind}/${videoId}/`;
+  }
+
   const parsed = new URL(url);
   parsed.hash = "";
-  if (platform === "youtube") {
-    const videoId =
-      parsed.searchParams.get("v") ??
-      (parsed.hostname.includes("youtu.be") ? parsed.pathname.slice(1).split("/")[0] : null);
-    if (videoId) return `https://www.youtube.com/watch?v=${videoId}`;
-  }
-  if (platform === "tiktok") {
-    parsed.search = "";
-  }
+  parsed.search = "";
   return parsed.toString().replace(/\/$/, "");
 }
 
@@ -114,3 +159,6 @@ export async function hashIp(ip: string, salt = "videoclub"): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+export const DUPLICATE_VIDEO_MESSAGE =
+  "This video is already on Video Club. Each video counts once — the product link in its description locks attribution.";

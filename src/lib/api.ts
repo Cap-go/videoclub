@@ -1,3 +1,5 @@
+export type BoardPeriod = "all" | "today";
+
 export interface LeaderboardEntry {
   id: number;
   rank: number;
@@ -14,7 +16,8 @@ export interface StartupVideo {
   platform: string;
   title: string;
   thumbnail: string | null;
-  created_at: string;
+  published_at: string | null;
+  submitted_at: string;
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -32,8 +35,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-export function getLeaderboard() {
-  return api<{ entries: LeaderboardEntry[] }>("/api/leaderboard");
+export function getLeaderboard(period: BoardPeriod = "all") {
+  return api<{ period: BoardPeriod; entries: LeaderboardEntry[] }>(
+    `/api/leaderboard?period=${period}`,
+  );
 }
 
 export function getStartupVideos(id: number) {
@@ -47,9 +52,11 @@ export function checkVideo(videoUrl: string) {
   return api<{
     emailRequired: boolean;
     productFound: boolean;
+    duplicate?: boolean;
     productUrl?: string;
     productHost?: string;
     startupName?: string;
+    publishedAt?: string | null;
     error?: string;
   }>("/api/check", {
     method: "POST",
@@ -61,7 +68,7 @@ export function submitVideo(videoUrl: string, email?: string) {
   return api<{
     ok: boolean;
     startup: { id: number; name: string; product_url: string; rank: number };
-    video: { title: string; platform: string; url: string };
+    video: { title: string; platform: string; url: string; publishedAt: string | null };
   }>("/api/submit", {
     method: "POST",
     body: JSON.stringify({ videoUrl, email: email || undefined }),

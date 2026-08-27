@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
 import { LivePill } from "../components/LivePill";
 import { RankCard } from "../components/RankCard";
 import {
@@ -7,11 +8,13 @@ import {
   getStartupVideos,
   reportVideo,
   submitVideo,
+  type BoardPeriod,
   type LeaderboardEntry,
   type StartupVideo,
 } from "../lib/api";
 
 export function Home() {
+  const { period } = useOutletContext<{ period: BoardPeriod }>();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -30,14 +33,14 @@ export function Home() {
   const loadBoard = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getLeaderboard();
+      const data = await getLeaderboard(period);
       setEntries(data.entries);
     } catch {
       setEntries([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [period]);
 
   useEffect(() => {
     void loadBoard();
@@ -214,9 +217,9 @@ export function Home() {
             <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">How it works</p>
             <ul className="mt-3 space-y-2 text-sm text-[#6b7280]">
               <li>Paste a founder video URL</li>
-              <li>Product link must be in the description</li>
-              <li>Real human on camera — no AI slop</li>
-              <li>More videos = higher rank</li>
+              <li>Product link must be in the description today</li>
+              <li>Old videos count on All-time — dump your back catalog</li>
+              <li>Same video id never counts twice</li>
             </ul>
           </div>
           <div className="rounded-2xl border border-[#fcd4c4] bg-[#fff9f7] p-4">
@@ -229,7 +232,14 @@ export function Home() {
 
         <section className="min-w-0 space-y-4">
           <div className="flex items-end justify-between gap-4">
-            <h2 className="text-2xl font-bold text-[#111]">Leaderboard</h2>
+            <div>
+              <h2 className="text-2xl font-bold text-[#111]">Leaderboard</h2>
+              <p className="mt-1 text-sm text-[#9ca3af]">
+                {period === "today"
+                  ? "Videos published in the last 24h (or submitted today if publish date unknown)."
+                  : "Every valid video counts — including your back catalog."}
+              </p>
+            </div>
             {!loading && entries.length > 0 && (
               <span className="text-sm text-[#9ca3af]">{entries.length} on the board</span>
             )}

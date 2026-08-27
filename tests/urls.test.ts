@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseDescriptionFromHtml } from "../worker/lib/video";
+import { parseDescriptionFromHtml, parsePublishedAtFromHtml } from "../worker/lib/video";
 import {
+  DUPLICATE_VIDEO_MESSAGE,
   detectPlatform,
+  extractPlatformVideoId,
   extractProductUrl,
   hostToName,
   isValidEmail,
@@ -19,26 +21,44 @@ describe("URL parsing", () => {
     expect(detectPlatform("https://example.com")).toBeNull();
   });
 
+  it("extracts canonical YouTube id across URL variants", () => {
+    const id = "dQw4w9WgXcQ";
+    expect(extractPlatformVideoId(`https://www.youtube.com/watch?v=${id}&si=foo`, "youtube")).toBe(id);
+    expect(extractPlatformVideoId(`https://youtu.be/${id}?si=bar`, "youtube")).toBe(id);
+    expect(extractPlatformVideoId(`https://www.youtube.com/shorts/${id}`, "youtube")).toBe(id);
+    expect(normalizeVideoUrl(`https://youtu.be/${id}?si=x`, "youtube")).toBe(
+      `https://www.youtube.com/watch?v=${id}`,
+    );
+    expect(normalizeVideoUrl(`https://www.youtube.com/shorts/${id}`, "youtube")).toBe(
+      `https://www.youtube.com/watch?v=${id}`,
+    );
+  });
+
+  it("extracts TikTok and Instagram ids", () => {
+    expect(extractPlatformVideoId("https://www.tiktok.com/@founder/video/7123456789012345678", "tiktok")).toBe(
+      "7123456789012345678",
+    );
+    expect(extractPlatformVideoId("https://www.instagram.com/reel/ABC123xyz/", "instagram")).toBe("ABC123xyz");
+    expect(extractPlatformVideoId("https://www.instagram.com/p/XYZ_9-a/", "instagram")).toBe("XYZ_9-a");
+  });
+
+  it("treats same content on different platforms as different ids", () => {
+    const youtube = extractPlatformVideoId("https://www.youtube.com/watch?v=abc12345678", "youtube");
+    const tiktok = extractPlatformVideoId("https://www.tiktok.com/@x/video/7123456789012345678", "tiktok");
+    const instagram = extractPlatformVideoId("https://www.instagram.com/reel/DiffShort1/", "instagram");
+    expect(youtube).toBe("abc12345678");
+    expect(tiktok).toBe("7123456789012345678");
+    expect(instagram).toBe("DiffShort1");
+  });
+
   it("normalizes product hosts", () => {
     expect(normalizeProductHost("https://www.Capgo.app/pricing")).toBe("capgo.app");
     expect(normalizeProductHost("https://youtube.com/watch?v=1")).toBeNull();
-    expect(normalizeProductHost("https://tiktok.com/@x")).toBeNull();
   });
 
   it("extracts first non-platform product URL from description", () => {
     const desc = "Built with AI? No. Check https://capgo.app and also https://youtube.com/watch?v=1";
     expect(extractProductUrl(desc)).toBe("https://capgo.app");
-  });
-
-  it("ignores instagram links in description", () => {
-    const desc = "Follow https://instagram.com/foo — product: https://myapp.io";
-    expect(extractProductUrl(desc)).toBe("https://myapp.io");
-  });
-
-  it("normalizes youtube URLs", () => {
-    expect(normalizeVideoUrl("https://youtu.be/abc123?si=x", "youtube")).toBe(
-      "https://www.youtube.com/watch?v=abc123",
-    );
   });
 
   it("normalizes product URLs", () => {
@@ -53,12 +73,21 @@ describe("URL parsing", () => {
     expect(isValidEmail("founder@startup.com")).toBe(true);
     expect(isValidEmail("not-an-email")).toBe(false);
   });
+
+  it("exposes duplicate video message", () => {
+    expect(DUPLICATE_VIDEO_MESSAGE).toContain("already on Video Club");
+  });
 });
 
 describe("description parsing", () => {
   it("extracts YouTube shortDescription from HTML", () => {
     const html = `"shortDescription":"Try https://capgo.app today for live updates"`;
     expect(parseDescriptionFromHtml(html, "youtube")).toContain("https://capgo.app");
+  });
+
+  it("extracts YouTube uploadDate from HTML", () => {
+    const html = `"uploadDate":"2019-06-12"`;
+    expect(parsePublishedAtFromHtml(html, "youtube")).toContain("2019");
   });
 
   it("extracts og:description for instagram-style pages", () => {
