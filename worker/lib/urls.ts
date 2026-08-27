@@ -9,7 +9,16 @@ const BLOCKED_HOSTS = new Set([
   "instagram.com",
   "www.instagram.com",
   "instagr.am",
+  "x.com",
+  "www.x.com",
+  "mobile.x.com",
+  "twitter.com",
+  "www.twitter.com",
+  "mobile.twitter.com",
+  "t.co",
 ]);
+
+const X_HOSTS = new Set(["x.com", "twitter.com", "mobile.x.com", "mobile.twitter.com"]);
 
 export function normalizeProductHost(input: string): string | null {
   try {
@@ -75,7 +84,9 @@ export function extractProductUrl(description: string): string | null {
   return null;
 }
 
-export type VideoPlatform = "youtube" | "tiktok" | "instagram";
+export type VideoPlatform = "youtube" | "tiktok" | "instagram" | "x";
+
+export const SUPPORTED_PLATFORMS_MESSAGE = "YouTube, TikTok, Instagram, and X";
 
 export function detectPlatform(url: string): VideoPlatform | null {
   try {
@@ -89,6 +100,9 @@ export function detectPlatform(url: string): VideoPlatform | null {
     }
     if (host === "instagram.com" || host === "instagr.am") {
       return "instagram";
+    }
+    if (X_HOSTS.has(host)) {
+      return "x";
     }
     return null;
   } catch {
@@ -126,6 +140,11 @@ export function extractPlatformVideoId(url: string, platform: VideoPlatform): st
       const match = parsed.pathname.match(/\/(?:reel|p|tv)\/([A-Za-z0-9_-]+)/);
       return match?.[1] ?? null;
     }
+
+    if (platform === "x") {
+      const status = parsed.pathname.match(/\/status\/(\d+)/);
+      if (status?.[1]) return status[1];
+    }
   } catch {
     return null;
   }
@@ -149,6 +168,9 @@ export function normalizeVideoUrl(url: string, platform: VideoPlatform): string 
     const parsed = new URL(url);
     const kind = parsed.pathname.includes("/p/") ? "p" : "reel";
     return `https://www.instagram.com/${kind}/${videoId}/`;
+  }
+  if (platform === "x" && videoId) {
+    return `https://x.com/i/status/${videoId}`;
   }
 
   const parsed = new URL(url);

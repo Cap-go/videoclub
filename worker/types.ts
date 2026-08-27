@@ -73,7 +73,7 @@ export interface FeedVideoEntry {
 }
 
 export interface VideoMetadata {
-  platform: "youtube" | "tiktok" | "instagram";
+  platform: "youtube" | "tiktok" | "instagram" | "x";
   videoId: string;
   title: string;
   description: string;

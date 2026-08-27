@@ -75,7 +75,7 @@ export function Manifesto() {
         <h2 className="text-2xl font-bold text-[#111] sm:text-3xl">The rules, in one breath</h2>
         <div className="space-y-4 text-lg leading-relaxed text-[#374151] sm:text-xl">
           <p>
-            Put your product link in the video description. Post on YouTube, TikTok, or Instagram. Old videos
+            Put your product link in the video description. Post on YouTube, TikTok, Instagram, or X. Old videos
             count — dump your back catalog. Same video never counts twice.
           </p>
           <p>

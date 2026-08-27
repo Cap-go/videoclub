@@ -167,7 +167,7 @@ export async function getLockedPlatformAccount(
   if (row.platform_account) return row.platform_account;
 
   if (row.author) {
-    return resolvePlatformAccount(platform as "youtube" | "tiktok" | "instagram", {
+    return resolvePlatformAccount(platform as "youtube" | "tiktok" | "instagram" | "x", {
       author: row.author,
     });
   }

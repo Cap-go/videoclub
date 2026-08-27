@@ -159,7 +159,7 @@ api.post("/check", async (c) => {
       return c.json({
         emailRequired: false,
         productFound: false,
-        error: "No product link found in the video description. Add your startup URL (not YouTube/TikTok/Instagram).",
+        error: "No product link found in the video description. Add your startup URL (not YouTube/TikTok/Instagram/X).",
       });
     }
 
@@ -227,7 +227,7 @@ api.post("/submit", async (c) => {
     return c.json(
       {
         error:
-          "No product link in the video description. Add your startup URL (http/https, not YouTube/TikTok/Instagram).",
+          "No product link in the video description. Add your startup URL (http/https, not YouTube/TikTok/Instagram/X).",
       },
       400,
     );

@@ -9,7 +9,7 @@ export function Rules() {
       <section className="space-y-3">
         <h2 className="text-xl font-bold text-[#111]">What counts</h2>
         <ul className="list-disc space-y-2 pl-5 leading-relaxed text-[#374151]">
-          <li>YouTube, TikTok, Instagram. Old videos are fine.</li>
+          <li>YouTube, TikTok, Instagram, X. Old videos are fine.</li>
           <li>
             The product link must be in the description. That is how we know who the video is for.
           </li>
@@ -44,7 +44,7 @@ export function Rules() {
       <section className="space-y-3">
         <h2 className="text-xl font-bold text-[#111]">One account per platform</h2>
         <p className="leading-relaxed text-[#374151]">
-          Each domain gets one YouTube account, one TikTok account, and one Instagram account. Affiliates
+          Each domain gets one YouTube account, one TikTok account, one Instagram account, and one X account. Affiliates
           cannot post for your startup. If you legitimately have two accounts on the same platform, you can
           force the submit — we get an email and review it.
         </p>

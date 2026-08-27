@@ -22,6 +22,9 @@ describe("URL parsing", () => {
     expect(detectPlatform("https://youtu.be/abc")).toBe("youtube");
     expect(detectPlatform("https://www.tiktok.com/@x/video/123")).toBe("tiktok");
     expect(detectPlatform("https://www.instagram.com/reel/abc/")).toBe("instagram");
+    expect(detectPlatform("https://x.com/founder/status/1234567890")).toBe("x");
+    expect(detectPlatform("https://twitter.com/founder/status/1234567890")).toBe("x");
+    expect(detectPlatform("https://mobile.twitter.com/founder/status/1234567890")).toBe("x");
     expect(detectPlatform("https://example.com")).toBeNull();
   });
 
@@ -44,6 +47,18 @@ describe("URL parsing", () => {
     );
     expect(extractPlatformVideoId("https://www.instagram.com/reel/ABC123xyz/", "instagram")).toBe("ABC123xyz");
     expect(extractPlatformVideoId("https://www.instagram.com/p/XYZ_9-a/", "instagram")).toBe("XYZ_9-a");
+  });
+
+  it("extracts canonical X status id across URL variants", () => {
+    const id = "1234567890123456789";
+    expect(extractPlatformVideoId(`https://x.com/founder/status/${id}`, "x")).toBe(id);
+    expect(extractPlatformVideoId(`https://twitter.com/founder/status/${id}?s=20`, "x")).toBe(id);
+    expect(extractPlatformVideoId(`https://x.com/i/status/${id}`, "x")).toBe(id);
+    expect(extractPlatformVideoId(`https://mobile.twitter.com/founder/status/${id}`, "x")).toBe(id);
+    expect(normalizeVideoUrl(`https://twitter.com/founder/status/${id}`, "x")).toBe(
+      `https://x.com/i/status/${id}`,
+    );
+    expect(normalizeVideoUrl(`https://x.com/founder/status/${id}`, "x")).toBe(`https://x.com/i/status/${id}`);
   });
 
   it("treats same content on different platforms as different ids", () => {
@@ -96,7 +111,13 @@ describe("URL parsing", () => {
     expect(normalizeProductUrl("https://youtube.com/watch?v=1")).toBeNull();
     expect(normalizeProductUrl("https://www.tiktok.com/@x/video/123")).toBeNull();
     expect(normalizeProductUrl("https://instagram.com/reel/abc")).toBeNull();
+    expect(normalizeProductUrl("https://x.com/founder/status/123")).toBeNull();
+    expect(normalizeProductUrl("https://twitter.com/founder/status/123")).toBeNull();
+    expect(normalizeProductUrl("https://t.co/abc123")).toBeNull();
     expect(extractProductUrl("check https://youtube.com/watch?v=1")).toBeNull();
+    expect(extractProductUrl("follow https://x.com/founder and visit https://capgo.app")).toBe(
+      "https://capgo.app",
+    );
   });
 
   it("stores first non-platform URL as domain-only", () => {
