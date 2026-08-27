@@ -27,6 +27,7 @@ import {
   platformLabel,
   REVIEW_INBOX,
 } from "../lib/platform-account";
+import { getBigTechRejection } from "../lib/submit-validation";
 import {
   DUPLICATE_VIDEO_MESSAGE,
   extractProductUrl,
@@ -155,6 +156,17 @@ api.post("/check", async (c) => {
     }
 
     const productUrl = metadata.productUrl ?? extractProductUrl(metadata.description);
+
+    const bigTechRejection = getBigTechRejection({
+      productUrl,
+      description: metadata.description,
+      platform: metadata.platform,
+      platformAccount: metadata.platformAccount,
+    });
+    if (bigTechRejection) {
+      return c.json({ emailRequired: false, productFound: false, error: bigTechRejection });
+    }
+
     if (!productUrl) {
       return c.json({
         emailRequired: false,
@@ -224,6 +236,18 @@ api.post("/submit", async (c) => {
   }
 
   const productUrlFound = metadata.productUrl ?? extractProductUrl(metadata.description);
+
+  const bigTechRejection = getBigTechRejection({
+    productUrl: productUrlFound,
+    description: metadata.description,
+    platform: metadata.platform,
+    platformAccount: metadata.platformAccount,
+    email,
+  });
+  if (bigTechRejection) {
+    return c.json({ error: bigTechRejection }, 403);
+  }
+
   if (!productUrlFound) {
     return c.json(
       {

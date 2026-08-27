@@ -18,12 +18,53 @@ const BLOCKED_HOSTS = new Set([
   "t.co",
   "pic.x.com",
   "pic.twitter.com",
+  "goo.gle",
+  "g.co",
+  "blog.google",
+  "google",
 ]);
 
 const X_HOSTS = new Set(["x.com", "twitter.com", "mobile.x.com", "mobile.twitter.com"]);
 
 /** Platform/vendor chrome — exact host or any subdomain (e.g. support.google.com). */
-const BLOCKED_PARENT_DOMAINS = ["google.com", "apple.com", "facebook.com", "microsoft.com"];
+const BLOCKED_PARENT_DOMAINS = [
+  "google.com",
+  "withgoogle.com",
+  "apple.com",
+  "facebook.com",
+  "microsoft.com",
+];
+
+const BIG_TECH_GOOGLE_HOSTS = new Set(["goo.gle", "g.co", "blog.google", "google"]);
+const BIG_TECH_GOOGLE_PARENT_DOMAINS = ["google.com", "withgoogle.com"];
+
+function parseProductHost(input: string): string | null {
+  try {
+    const url = new URL(input.startsWith("http") ? input : `https://${input}`);
+    if (!["http:", "https:"].includes(url.protocol)) return null;
+    let host = url.hostname.toLowerCase();
+    if (host.startsWith("www.")) host = host.slice(4);
+    return host || null;
+  } catch {
+    const cleaned = input.trim().toLowerCase().replace(/^www\./, "");
+    const host = cleaned.split("/")[0]?.split(":")[0];
+    if (!host || host.includes(" ") || host.includes("@")) return null;
+    return host;
+  }
+}
+
+function isBigTechGoogleHost(host: string): boolean {
+  if (BIG_TECH_GOOGLE_HOSTS.has(host)) return true;
+  return BIG_TECH_GOOGLE_PARENT_DOMAINS.some(
+    (parent) => host === parent || host.endsWith(`.${parent}`),
+  );
+}
+
+/** True when a URL/host is a blocked Google / Big Tech product listing (for user-facing errors). */
+export function isRejectedBigTechProductUrl(input: string): boolean {
+  const host = parseProductHost(input);
+  return host != null && isBigTechGoogleHost(host);
+}
 
 function isBlockedProductHost(host: string): boolean {
   if (BLOCKED_HOSTS.has(host) || BLOCKED_HOSTS.has(`www.${host}`)) return true;
@@ -89,6 +130,25 @@ export function extractProductUrl(description: string): string | null {
     if (!domain || domain.includes("@")) continue;
     const normalized = tryNormalizeProductUrl(domain);
     if (normalized) return normalized;
+  }
+
+  return null;
+}
+
+/** First Google / Big Tech product URL in text, including hosts blocked from extraction. */
+export function findRejectedBigTechProductUrl(text: string): string | null {
+  if (!text) return null;
+
+  for (const match of text.match(URL_REGEX) ?? []) {
+    const cleaned = cleanUrl(match);
+    if (isRejectedBigTechProductUrl(cleaned)) return cleaned;
+  }
+
+  for (const match of text.matchAll(BARE_DOMAIN_REGEX)) {
+    const domain = match[1];
+    if (!domain || domain.includes("@")) continue;
+    const cleaned = cleanUrl(domain);
+    if (isRejectedBigTechProductUrl(cleaned)) return cleaned;
   }
 
   return null;

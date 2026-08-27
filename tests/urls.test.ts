@@ -9,6 +9,7 @@ import {
   detectPlatform,
   extractPlatformVideoId,
   extractProductUrl,
+  findRejectedBigTechProductUrl,
   hostToName,
   isValidEmail,
   normalizeProductHost,
@@ -132,12 +133,49 @@ describe("URL parsing", () => {
     expect(normalizeProductHost("https://play.google.com/store/apps")).toBeNull();
     expect(normalizeProductHost("https://apps.apple.com/app/id123")).toBeNull();
     expect(normalizeProductHost("https://google.com")).toBeNull();
+    expect(normalizeProductHost("https://goo.gle")).toBeNull();
+    expect(normalizeProductHost("https://goo.gle/anything")).toBeNull();
+    expect(normalizeProductHost("https://g.co/abc")).toBeNull();
+    expect(normalizeProductHost("https://withgoogle.com")).toBeNull();
+    expect(normalizeProductHost("https://foo.withgoogle.com/bar")).toBeNull();
+    expect(normalizeProductHost("https://blog.google")).toBeNull();
+    expect(normalizeProductHost("https://google")).toBeNull();
 
     expect(normalizeProductUrl("https://support.google.com/youtube/answer/3037019")).toBeNull();
     expect(normalizeProductUrl("https://accounts.google.com/ServiceLogin?continue=1")).toBeNull();
     expect(normalizeProductUrl("https://play.google.com/store/apps/details?id=foo")).toBeNull();
     expect(normalizeProductUrl("https://apps.apple.com/app/example/id123")).toBeNull();
     expect(normalizeProductUrl("https://google.com")).toBeNull();
+    expect(normalizeProductUrl("https://goo.gle")).toBeNull();
+    expect(normalizeProductUrl("https://g.co/link")).toBeNull();
+    expect(normalizeProductUrl("https://withgoogle.com")).toBeNull();
+    expect(normalizeProductUrl("https://blog.google/products")).toBeNull();
+  });
+
+  it("does not block gmail.com as a product host", () => {
+    expect(normalizeProductHost("https://gmail.com")).toBe("gmail.com");
+    expect(normalizeProductUrl("https://gmail.com")).toBe("https://gmail.com");
+  });
+
+  it("extracts no product from Google short-domain-only description", () => {
+    const desc = [
+      "Gemini updates",
+      "https://goo.gle",
+      "https://support.google.com/youtube/answer/3037019",
+    ].join("\n");
+    expect(extractProductUrl(desc)).toBeNull();
+    expect(findRejectedBigTechProductUrl(desc)).toBe("https://goo.gle");
+  });
+
+  it("prefers real maker product over Google short domains in description", () => {
+    const desc = "promo https://goo.gle then try https://capgo.app";
+    expect(extractProductUrl(desc)).toBe("https://capgo.app");
+  });
+
+  it("prefers maker product over Play Store and other Google chrome URLs", () => {
+    const desc =
+      "Download https://play.google.com/store/apps/details?id=app and visit https://capgo.app";
+    expect(extractProductUrl(desc)).toBe("https://capgo.app");
   });
 
   it("extracts no product from chrome-only YouTube description", () => {
