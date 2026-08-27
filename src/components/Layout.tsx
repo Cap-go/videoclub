@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import type { BoardPeriod } from "../lib/api";
+import { LiveVisitors } from "./LiveVisitors";
 
 export function Layout() {
   const location = useLocation();
@@ -22,10 +23,13 @@ export function Layout() {
     <div className="min-h-screen bg-[#faf8f5] text-[#111]">
       <header className="border-b border-[#e8e4df] bg-[#faf8f5]/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight sm:text-xl">
-            <img src="/logo.png" alt="" width={28} height={28} className="h-7 w-7 shrink-0" />
-            videoclub.lol
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link to="/" className="flex items-center gap-2 text-lg font-bold tracking-tight sm:text-xl">
+              <img src="/logo.png" alt="" width={28} height={28} className="h-7 w-7 shrink-0" />
+              videoclub.lol
+            </Link>
+            <LiveVisitors />
+          </div>
 
           {location.pathname === "/" && (
             <div className="order-last flex w-full justify-center sm:order-none sm:w-auto">
