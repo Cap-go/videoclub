@@ -18,6 +18,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Generate Worker types
+        run: bun run types
+
       - name: Typecheck
         run: bun run typecheck
 
