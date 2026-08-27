@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { HowItWorksModal } from "../components/HowItWorksModal";
+import { LeaderboardTierDivider } from "../components/LeaderboardTierDivider";
 import { LivePill } from "../components/LivePill";
 import { VisitorsPill } from "../components/VisitorsPill";
 import { RankCard } from "../components/RankCard";
@@ -21,6 +22,7 @@ import {
   type LeaderboardEntry,
   type StartupVideo,
 } from "../lib/api";
+import { boardTierAriaLabel, boardTierLabel, shouldShowTierDivider } from "../lib/leaderboard-tiers";
 
 const CHECK_DEBOUNCE_MS = 500;
 
@@ -457,25 +459,36 @@ export function Home() {
             </div>
           ) : (
             <div className="space-y-3">
-              {entries.map((entry) => (
-                <RankCard
-                  key={entry.id}
-                  entry={entry}
-                  expanded={expandedId === entry.id}
-                  videosLoading={videosLoading}
-                  videos={expandedId === entry.id ? expandedVideos : []}
-                  onToggle={() => void toggleRow(entry)}
-                  onChallenge={(id, reason) => void handleChallenge(id, reason)}
-                  onEntryClickUpdate={(startupId, clickCount) => {
-                    setEntries((prev) =>
-                      prev.map((item) =>
-                        item.id === startupId ? { ...item, click_count: clickCount } : item,
-                      ),
-                    );
-                  }}
-                  onSiteClickUpdate={setTotalClicks}
-                />
-              ))}
+              {entries.map((entry) => {
+                const tierLabel = boardTierLabel(entry.rank);
+                const tierAriaLabel = boardTierAriaLabel(entry.rank);
+                const showDivider =
+                  tierLabel !== null && shouldShowTierDivider(entry.rank, entries.length);
+
+                return (
+                  <Fragment key={entry.id}>
+                    <RankCard
+                      entry={entry}
+                      expanded={expandedId === entry.id}
+                      videosLoading={videosLoading}
+                      videos={expandedId === entry.id ? expandedVideos : []}
+                      onToggle={() => void toggleRow(entry)}
+                      onChallenge={(id, reason) => void handleChallenge(id, reason)}
+                      onEntryClickUpdate={(startupId, clickCount) => {
+                        setEntries((prev) =>
+                          prev.map((item) =>
+                            item.id === startupId ? { ...item, click_count: clickCount } : item,
+                          ),
+                        );
+                      }}
+                      onSiteClickUpdate={setTotalClicks}
+                    />
+                    {showDivider && tierLabel && tierAriaLabel && (
+                      <LeaderboardTierDivider label={tierLabel} ariaLabel={tierAriaLabel} />
+                    )}
+                  </Fragment>
+                );
+              })}
             </div>
           )}
         </section>
