@@ -1,3 +1,4 @@
+import { getCookie, setCookie } from "hono/cookie";
 import { Hono } from "hono";
 import {
   getChallengeCount,
@@ -41,6 +42,13 @@ import {
   normalizeProductUrl,
 } from "../lib/urls";
 import { fetchStartupLogo } from "../lib/logo";
+import {
+  getVisitorCounts,
+  PRESENCE_COOKIE,
+  PRESENCE_COOKIE_MAX_AGE,
+  recordVisitor,
+  resolveVisitorId,
+} from "../lib/presence";
 import { fetchVideoMetadata } from "../lib/video";
 import type { BoardPeriod, Env } from "../types";
 
@@ -94,6 +102,31 @@ api.get("/logo/:host", async (c) => {
 
   c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
   return response;
+});
+
+api.get("/visitors", async (c) => {
+  const counts = await getVisitorCounts(c.env.DB);
+  return c.json(counts);
+});
+
+api.post("/visitors", async (c) => {
+  const cookieId = getCookie(c, PRESENCE_COOKIE);
+  const body = (await c.req.json<{ visitorId?: string }>().catch(
+    (): { visitorId?: string } => ({}),
+  )) as { visitorId?: string };
+  const visitorId = resolveVisitorId(cookieId, body.visitorId);
+  const counts = await recordVisitor(c.env.DB, visitorId);
+
+  const secure = new URL(c.req.url).protocol === "https:";
+  setCookie(c, PRESENCE_COOKIE, visitorId, {
+    path: "/",
+    httpOnly: true,
+    secure,
+    sameSite: "Lax",
+    maxAge: PRESENCE_COOKIE_MAX_AGE,
+  });
+
+  return c.json(counts);
 });
 
 api.get("/leaderboard", async (c) => {

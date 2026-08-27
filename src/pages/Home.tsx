@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { HowItWorksModal } from "../components/HowItWorksModal";
 import { LivePill } from "../components/LivePill";
-import { LiveVisitors } from "../components/LiveVisitors";
+import { VisitorsPill } from "../components/VisitorsPill";
 import { RankCard } from "../components/RankCard";
 import {
   getPrefilledEmail,
@@ -250,7 +250,7 @@ export function Home() {
           totalClicks={totalClicks}
           totalPlays={totalPlays}
         />
-        <LiveVisitors />
+        <VisitorsPill />
       </div>
 
       <section className="mx-auto max-w-4xl space-y-4 pt-2 text-center">

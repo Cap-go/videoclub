@@ -1,3 +1,7 @@
+export function formatCount(n: number): string {
+  return n.toLocaleString();
+}
+
 export function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(diff / 60000);
