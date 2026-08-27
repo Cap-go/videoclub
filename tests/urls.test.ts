@@ -55,10 +55,15 @@ describe("URL parsing", () => {
     expect(extractPlatformVideoId(`https://twitter.com/founder/status/${id}?s=20`, "x")).toBe(id);
     expect(extractPlatformVideoId(`https://x.com/i/status/${id}`, "x")).toBe(id);
     expect(extractPlatformVideoId(`https://mobile.twitter.com/founder/status/${id}`, "x")).toBe(id);
+    expect(extractPlatformVideoId(`https://x.com/founder/status/${id}/video/1?s=46`, "x")).toBe(id);
+    expect(extractPlatformVideoId(`https://x.com/founder/status/${id}/photo/1#hash`, "x")).toBe(id);
     expect(normalizeVideoUrl(`https://twitter.com/founder/status/${id}`, "x")).toBe(
       `https://x.com/i/status/${id}`,
     );
     expect(normalizeVideoUrl(`https://x.com/founder/status/${id}`, "x")).toBe(`https://x.com/i/status/${id}`);
+    expect(normalizeVideoUrl(`https://x.com/founder/status/${id}/video/1?s=46`, "x")).toBe(
+      `https://x.com/i/status/${id}`,
+    );
   });
 
   it("treats same content on different platforms as different ids", () => {

@@ -4,6 +4,8 @@ import { isHttpBlocked, type ProxiedFetchBindings, proxiedFetch } from "./proxie
 import {
   detectPlatform,
   extractPlatformVideoId,
+  extractProductUrl,
+  normalizeProductUrl,
   normalizeVideoUrl,
   SUPPORTED_PLATFORMS_MESSAGE,
   type VideoPlatform,
@@ -115,6 +117,7 @@ export async function fetchVideoMetadata(
     }),
     publishedAt,
     normalizedUrl,
+    productUrl: extractProductUrl(description),
   };
 }
 
@@ -820,6 +823,7 @@ function buildXVideoMetadata(
   videoId: string,
   normalizedUrl: string,
   parsed: XParsedMetadata,
+  productUrl: string | null,
 ): VideoMetadata {
   if (!parsed.description.trim()) {
     throw new Error(X_EMPTY_MESSAGE);
@@ -836,7 +840,95 @@ function buildXVideoMetadata(
     authorUrl: parsed.authorUrl,
     platformAccount: parsed.platformAccount,
     publishedAt: parsed.publishedAt,
+    productUrl,
   };
+}
+
+/** Test helper: ordered @handles from syndication entities.user_mentions. */
+export function extractXMentionsFromSyndication(data: Record<string, unknown>): string[] {
+  const entities = data.entities as Record<string, unknown> | undefined;
+  const mentions = entities?.user_mentions as Array<Record<string, unknown>> | undefined;
+  const handles: string[] = [];
+  for (const mention of mentions ?? []) {
+    const screenName = typeof mention.screen_name === "string" ? mention.screen_name : null;
+    if (screenName) handles.push(screenName);
+  }
+  return handles;
+}
+
+/** Test helper: ordered @handles from fxtwitter raw_text facets or tweet text. */
+export function extractXMentionsFromFxTwitter(tweet: Record<string, unknown>): string[] {
+  const rawText = tweet.raw_text as Record<string, unknown> | undefined;
+  const facets = rawText?.facets as Array<Record<string, unknown>> | undefined;
+  if (facets?.length) {
+    const handles: string[] = [];
+    for (const facet of facets) {
+      if (facet.type !== "mention") continue;
+      const original = typeof facet.original === "string" ? facet.original : null;
+      if (original) handles.push(original.replace(/^@/, ""));
+    }
+    if (handles.length) return handles;
+  }
+
+  const text = typeof tweet.text === "string" ? tweet.text : "";
+  const handles: string[] = [];
+  for (const match of text.matchAll(/@([A-Za-z0-9_]{1,15})/g)) {
+    if (match[1]) handles.push(match[1]);
+  }
+  return handles;
+}
+
+async function fetchFxTwitterUserWebsite(
+  handle: string,
+  bindings: VideoFetchBindings,
+): Promise<string | null> {
+  const url = `https://api.fxtwitter.com/${encodeURIComponent(handle)}`;
+  const data = await fetchXJsonWithRetry(url, bindings);
+  if (!data || data.code !== 200) return null;
+
+  const user = data.user as Record<string, unknown> | undefined;
+  const website = user?.website as Record<string, unknown> | undefined;
+  const websiteUrl = typeof website?.url === "string" ? website.url : null;
+  if (!websiteUrl) return null;
+
+  return normalizeProductUrl(websiteUrl);
+}
+
+/** Resolve product URL from tweet text, then tagged business mentions (skips author). */
+export async function resolveXProductUrl(
+  description: string,
+  authorHandle: string | null,
+  bindings: VideoFetchBindings,
+  raw?: { syndication?: Record<string, unknown>; fxTweet?: Record<string, unknown> },
+): Promise<string | null> {
+  const fromText = extractProductUrl(description);
+  if (fromText) return fromText;
+
+  const mentions =
+    raw?.syndication != null
+      ? extractXMentionsFromSyndication(raw.syndication)
+      : raw?.fxTweet != null
+        ? extractXMentionsFromFxTwitter(raw.fxTweet)
+        : [];
+
+  const authorLower = authorHandle?.replace(/^@/, "").toLowerCase() ?? null;
+  for (const handle of mentions) {
+    if (handle.toLowerCase() === authorLower) continue;
+    const productUrl = await fetchFxTwitterUserWebsite(handle, bindings);
+    if (productUrl) return productUrl;
+  }
+
+  return null;
+}
+
+function authorHandleFromSyndication(data: Record<string, unknown>): string | null {
+  const user = data.user as Record<string, unknown> | undefined;
+  return typeof user?.screen_name === "string" ? user.screen_name : null;
+}
+
+function authorHandleFromFxTweet(tweet: Record<string, unknown>): string | null {
+  const author = tweet.author as Record<string, unknown> | undefined;
+  return typeof author?.screen_name === "string" ? author.screen_name : null;
 }
 
 async function fetchXSyndication(
@@ -909,7 +1001,11 @@ async function fetchXVideoMetadata(
     if (!tweetHasVideo(syndication)) {
       throw new Error(X_NO_VIDEO_MESSAGE);
     }
-    return buildXVideoMetadata(videoId, normalizedUrl, parseXSyndicationResponse(syndication));
+    const parsed = parseXSyndicationResponse(syndication);
+    const productUrl = await resolveXProductUrl(parsed.description, authorHandleFromSyndication(syndication), bindings, {
+      syndication,
+    });
+    return buildXVideoMetadata(videoId, normalizedUrl, parsed, productUrl);
   }
 
   const fxTweet = await fetchFxTwitter(videoId, bindings);
@@ -917,11 +1013,18 @@ async function fetchXVideoMetadata(
     if (!fxTwitterHasVideo(fxTweet)) {
       throw new Error(X_NO_VIDEO_MESSAGE);
     }
-    return buildXVideoMetadata(videoId, normalizedUrl, parseFxTwitterResponse(fxTweet));
+    const parsed = parseFxTwitterResponse(fxTweet);
+    const productUrl = await resolveXProductUrl(parsed.description, authorHandleFromFxTweet(fxTweet), bindings, {
+      fxTweet,
+    });
+    return buildXVideoMetadata(videoId, normalizedUrl, parsed, productUrl);
   }
 
   const oembed = await fetchXOembed(normalizedUrl, bindings);
   if (oembed.hasVideo && oembed.description?.trim()) {
+    const authorHandle =
+      typeof oembed.author === "string" ? oembed.author.replace(/^@/, "") : null;
+    const productUrl = await resolveXProductUrl(oembed.description ?? "", authorHandle, bindings);
     return {
       platform: "x",
       videoId,
@@ -936,6 +1039,7 @@ async function fetchXVideoMetadata(
         authorUrl: oembed.authorUrl ?? null,
       }),
       publishedAt: null,
+      productUrl,
     };
   }
 

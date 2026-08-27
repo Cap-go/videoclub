@@ -83,6 +83,8 @@ export interface VideoMetadata {
   normalizedUrl: string;
   platformAccount: string | null;
   authorUrl: string | null;
+  /** Resolved product URL (tweet text link or tagged business mention on X). */
+  productUrl: string | null;
 }
 
 export type EmailKind = "welcome" | "rank_changed" | "challenged" | "removed" | "foreign_account_review";
