@@ -64,6 +64,9 @@ export function Layout() {
             <Link to="/rules" className={linkClass("/rules")}>
               Rules
             </Link>
+            <Link to="/manifesto" className={linkClass("/manifesto")}>
+              Manifesto
+            </Link>
             <Link to="/about" className={linkClass("/about")}>
               About
             </Link>
@@ -84,6 +87,10 @@ export function Layout() {
           {" · "}
           <Link to="/rules" className="hover:text-[#f4623a]">
             Rules
+          </Link>
+          {" · "}
+          <Link to="/manifesto" className="hover:text-[#f4623a]">
+            Manifesto
           </Link>
           {" · "}
           <Link to="/about" className="hover:text-[#f4623a]">
