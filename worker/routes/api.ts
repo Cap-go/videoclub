@@ -37,6 +37,7 @@ import {
   normalizeProductHost,
   normalizeProductUrl,
 } from "../lib/urls";
+import { fetchStartupLogo } from "../lib/logo";
 import { fetchVideoMetadata } from "../lib/video";
 import type { BoardPeriod, Env } from "../types";
 
@@ -53,6 +54,44 @@ function clientIp(c: { req: { header: (name: string) => string | undefined } }):
 function parsePeriod(value: string | undefined): BoardPeriod {
   return value === "today" ? "today" : "all";
 }
+
+api.get("/logo/:host", async (c) => {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(c.req.param("host"));
+  } catch {
+    return c.json({ error: "Invalid host" }, 400);
+  }
+
+  const host = normalizeProductHost(decoded);
+  if (!host) return c.json({ error: "Invalid host" }, 400);
+
+  const startup = await getStartupByHostIncludingRemoved(c.env.DB, host);
+  if (!startup || startup.removed_at) {
+    return c.json({ error: "Invalid host" }, 400);
+  }
+
+  const cache = await caches.open("videoclub-logos");
+  const cacheKey = new Request(`https://logo.videoclub.internal/${host}`);
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const logo = await fetchStartupLogo(host, c.env);
+  const isFallback = logo.contentType.startsWith("image/svg+xml");
+  const cacheControl = isFallback
+    ? "public, max-age=3600, stale-while-revalidate=600"
+    : "public, max-age=604800, stale-while-revalidate=86400";
+  const response = new Response(logo.bytes as BodyInit, {
+    status: 200,
+    headers: {
+      "Content-Type": logo.contentType,
+      "Cache-Control": cacheControl,
+    },
+  });
+
+  c.executionCtx.waitUntil(cache.put(cacheKey, response.clone()));
+  return response;
+});
 
 api.get("/leaderboard", async (c) => {
   const period = parsePeriod(c.req.query("period"));

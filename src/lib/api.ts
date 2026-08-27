@@ -138,5 +138,9 @@ export function getEmailPreviews() {
 }
 
 export function faviconUrl(host: string) {
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+  return `/api/logo/${encodeURIComponent(host)}`;
+}
+
+export function faviconFallbackUrl(host: string) {
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=256`;
 }
