@@ -31,6 +31,25 @@ describe("submit validation — Big Tech blocks", () => {
     expect(isBlockedFounderEmail("founder@gmail.com")).toBe(false);
   });
 
+  it("returns the maker-facing rejection message for Apple and Spotify listings", () => {
+    expect(
+      getBigTechRejection({
+        productUrl: "https://apple.co/foo",
+        platform: "youtube",
+        platformAccount: "https://www.youtube.com/@capgoapp",
+      }),
+    ).toBe(BIG_TECH_REJECT_MESSAGE);
+
+    expect(
+      getBigTechRejection({
+        productUrl: null,
+        description: "listen https://open.spotify.com/track/abc",
+        platform: "youtube",
+        platformAccount: "https://www.youtube.com/@capgoapp",
+      }),
+    ).toBe(BIG_TECH_REJECT_MESSAGE);
+  });
+
   it("returns the maker-facing rejection message", () => {
     expect(
       getBigTechRejection({

@@ -33,10 +33,25 @@ const BLOCKED_PARENT_DOMAINS = [
   "apple.com",
   "facebook.com",
   "microsoft.com",
+  "spotify.com",
 ];
 
-const BIG_TECH_GOOGLE_HOSTS = new Set(["goo.gle", "g.co", "blog.google", "google"]);
-const BIG_TECH_GOOGLE_PARENT_DOMAINS = ["google.com", "withgoogle.com"];
+const BIG_TECH_BLOCKED_HOSTS = new Set([
+  "goo.gle",
+  "g.co",
+  "blog.google",
+  "google",
+  "apple.co",
+  "icloud.com",
+  "spotify.link",
+]);
+
+const BIG_TECH_BLOCKED_PARENT_DOMAINS = [
+  "google.com",
+  "withgoogle.com",
+  "apple.com",
+  "spotify.com",
+];
 
 function parseProductHost(input: string): string | null {
   try {
@@ -53,9 +68,19 @@ function parseProductHost(input: string): string | null {
   }
 }
 
-function isBigTechGoogleHost(host: string): boolean {
-  if (BIG_TECH_GOOGLE_HOSTS.has(host)) return true;
-  return BIG_TECH_GOOGLE_PARENT_DOMAINS.some(
+/** Hosts like d.r.e (1-char labels / 1-char TLD) — not real maker product domains. */
+function isImplausibleProductHost(host: string): boolean {
+  const labels = host.split(".");
+  if (labels.length < 2) return true;
+  const tld = labels[labels.length - 1];
+  if (tld.length < 2) return true;
+  if (labels.every((label) => label.length === 1)) return true;
+  return false;
+}
+
+function isRejectedBigTechProductHost(host: string): boolean {
+  if (BIG_TECH_BLOCKED_HOSTS.has(host)) return true;
+  return BIG_TECH_BLOCKED_PARENT_DOMAINS.some(
     (parent) => host === parent || host.endsWith(`.${parent}`),
   );
 }
@@ -63,11 +88,13 @@ function isBigTechGoogleHost(host: string): boolean {
 /** True when a URL/host is a blocked Google / Big Tech product listing (for user-facing errors). */
 export function isRejectedBigTechProductUrl(input: string): boolean {
   const host = parseProductHost(input);
-  return host != null && isBigTechGoogleHost(host);
+  return host != null && isRejectedBigTechProductHost(host);
 }
 
 function isBlockedProductHost(host: string): boolean {
+  if (isImplausibleProductHost(host)) return true;
   if (BLOCKED_HOSTS.has(host) || BLOCKED_HOSTS.has(`www.${host}`)) return true;
+  if (BIG_TECH_BLOCKED_HOSTS.has(host)) return true;
   return BLOCKED_PARENT_DOMAINS.some((parent) => host === parent || host.endsWith(`.${parent}`));
 }
 
