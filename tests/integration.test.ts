@@ -324,6 +324,32 @@ describe("submit gates", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("accepts maker product when description also links Play Store", async () => {
+    vi.stubGlobal(
+      "fetch",
+      mockVideoFetch({
+        description:
+          "Get the app https://play.google.com/store/apps/details?id=app and visit https://capgo.app",
+        author_url: "https://www.youtube.com/@capgoapp",
+      }),
+    );
+
+    const res = await runWorker(
+      new Request("http://example.com/api/submit", {
+        method: "POST",
+        headers: { "CF-Connecting-IP": "12.12.12.12", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: "https://youtube.com/watch?v=capgo2",
+          email: "founder@gmail.com",
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("platform account locks", () => {

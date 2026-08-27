@@ -40,12 +40,15 @@ export function getBigTechRejection(input: {
   platformAccount: string | null;
   email?: string | null;
 }): string | null {
-  const blockedProductUrl =
-    (input.productUrl && isRejectedBigTechProductUrl(input.productUrl) ? input.productUrl : null) ??
-    (input.description ? findRejectedBigTechProductUrl(input.description) : null);
-  if (blockedProductUrl) {
+  if (input.productUrl && isRejectedBigTechProductUrl(input.productUrl)) {
     return BIG_TECH_REJECT_MESSAGE;
   }
+
+  // No accepted product URL — only then scan description for Google-only listings.
+  if (!input.productUrl && input.description && findRejectedBigTechProductUrl(input.description)) {
+    return BIG_TECH_REJECT_MESSAGE;
+  }
+
   if (isBlockedPlatformAccount(input.platform, input.platformAccount)) {
     return BIG_TECH_REJECT_MESSAGE;
   }

@@ -172,6 +172,12 @@ describe("URL parsing", () => {
     expect(extractProductUrl(desc)).toBe("https://capgo.app");
   });
 
+  it("prefers maker product over Play Store and other Google chrome URLs", () => {
+    const desc =
+      "Download https://play.google.com/store/apps/details?id=app and visit https://capgo.app";
+    expect(extractProductUrl(desc)).toBe("https://capgo.app");
+  });
+
   it("extracts no product from chrome-only YouTube description", () => {
     const desc = [
       "How to Create One Link for Your iOS & Android App | OneLink Tutorial",

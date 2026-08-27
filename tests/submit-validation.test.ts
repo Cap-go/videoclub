@@ -42,6 +42,15 @@ describe("submit validation — Big Tech blocks", () => {
 
     expect(
       getBigTechRejection({
+        productUrl: null,
+        description: "Try https://goo.gle for more",
+        platform: "youtube",
+        platformAccount: "https://www.youtube.com/@capgoapp",
+      }),
+    ).toBe(BIG_TECH_REJECT_MESSAGE);
+
+    expect(
+      getBigTechRejection({
         productUrl: "https://capgo.app",
         platform: "youtube",
         platformAccount: "https://www.youtube.com/@googledevelopers",
@@ -60,6 +69,21 @@ describe("submit validation — Big Tech blocks", () => {
     expect(
       getBigTechRejection({
         productUrl: "https://capgo.app",
+        platform: "youtube",
+        platformAccount: "https://www.youtube.com/@capgoapp",
+        email: "founder@gmail.com",
+      }),
+    ).toBeNull();
+  });
+
+  it("does not reject when a real product is resolved alongside Google chrome URLs", () => {
+    const description =
+      "Get it on https://play.google.com/store/apps/details?id=app and visit https://capgo.app";
+
+    expect(
+      getBigTechRejection({
+        productUrl: "https://capgo.app",
+        description,
         platform: "youtube",
         platformAccount: "https://www.youtube.com/@capgoapp",
         email: "founder@gmail.com",
