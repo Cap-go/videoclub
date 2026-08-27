@@ -1,11 +1,10 @@
-import { faviconUrl, type LeaderboardEntry, type ReportReason, type StartupVideo } from "../lib/api";
+import { faviconUrl, type ChallengeReason, type LeaderboardEntry, type StartupVideo } from "../lib/api";
 import { formatDate, platformLabel, timeAgo } from "../lib/format";
 
-const REPORT_OPTIONS: Array<{ value: ReportReason; label: string }> = [
+const CHALLENGE_OPTIONS: Array<{ value: ChallengeReason; label: string }> = [
   { value: "ai", label: "AI video" },
   { value: "not_founder", label: "Not the founder" },
-  { value: "no_product_link", label: "No product link" },
-  { value: "other", label: "Other" },
+  { value: "not_real_product", label: "Not a real product" },
 ];
 
 interface RankCardProps {
@@ -14,7 +13,7 @@ interface RankCardProps {
   videosLoading: boolean;
   videos: StartupVideo[];
   onToggle: () => void;
-  onReport: (videoId: number, reason: ReportReason) => void;
+  onChallenge: (videoId: number, reason: ChallengeReason) => void;
 }
 
 export function RankCard({
@@ -23,7 +22,7 @@ export function RankCard({
   videosLoading,
   videos,
   onToggle,
-  onReport,
+  onChallenge,
 }: RankCardProps) {
   const isTopThree = entry.rank <= 3;
   const claimTarget = entry.rank === 1 ? entry.video_count + 1 : null;
@@ -65,11 +64,7 @@ export function RankCard({
           <p className="mt-0.5 line-clamp-2 text-sm text-[#6b7280]">
             {entry.video_count} founder video{entry.video_count === 1 ? "" : "s"} about{" "}
             {entry.product_host}
-            {entry.founder_name && <> · {entry.founder_name}</>}
           </p>
-          {entry.name_unconfirmed && (
-            <p className="mt-1 text-xs text-[#b45309]">Name not on the video</p>
-          )}
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#9ca3af]">
             <span>{timeAgo(entry.first_video_at)}</span>
             <span>·</span>
@@ -117,12 +112,24 @@ export function RankCard({
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-semibold text-[#111]">{video.title}</div>
-                    <div className="mt-1 text-xs text-[#9ca3af]">
-                      {platformLabel(video.platform)}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#9ca3af]">
+                      <span>{platformLabel(video.platform)}</span>
                       {video.published_at && (
-                        <> · published {formatDate(video.published_at)}</>
+                        <>
+                          <span>·</span>
+                          <span>published {formatDate(video.published_at)}</span>
+                        </>
                       )}
-                      <> · submitted {timeAgo(video.submitted_at)}</>
+                      <span>·</span>
+                      <span>submitted {timeAgo(video.submitted_at)}</span>
+                      {video.challenge_count > 0 && (
+                        <>
+                          <span>·</span>
+                          <span className="font-medium text-[#b45309]">
+                            {video.challenge_count} challenge{video.challenge_count === 1 ? "" : "s"}
+                          </span>
+                        </>
+                      )}
                     </div>
                     <a
                       href={video.video_url}
@@ -134,15 +141,15 @@ export function RankCard({
                     </a>
                   </div>
                   <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-                    <label className="sr-only" htmlFor={`report-${video.id}`}>
-                      Report reason
+                    <label className="sr-only" htmlFor={`challenge-${video.id}`}>
+                      Challenge reason
                     </label>
                     <select
-                      id={`report-${video.id}`}
+                      id={`challenge-${video.id}`}
                       defaultValue="ai"
                       className="rounded-xl border border-[#e8e4df] bg-white px-2 py-2 text-xs text-[#374151]"
                     >
-                      {REPORT_OPTIONS.map((opt) => (
+                      {CHALLENGE_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
@@ -152,11 +159,11 @@ export function RankCard({
                       type="button"
                       onClick={(e) => {
                         const select = e.currentTarget.parentElement?.querySelector("select");
-                        onReport(video.id, (select?.value ?? "ai") as ReportReason);
+                        onChallenge(video.id, (select?.value ?? "ai") as ChallengeReason);
                       }}
-                      className="rounded-xl border border-[#fecaca] bg-[#fff5f5] px-3 py-2 text-xs font-medium text-[#dc2626] transition hover:bg-[#fee2e2]"
+                      className="rounded-xl border border-[#fcd4c4] bg-[#fff9f7] px-3 py-2 text-xs font-medium text-[#c2410c] transition hover:bg-[#ffe8df]"
                     >
-                      Report
+                      Challenge
                     </button>
                   </div>
                 </li>

@@ -12,13 +12,12 @@ Live at [videoclub.lol](https://videoclub.lol).
 2. We check for a person on camera and read the video description for your product URL.
 3. First video for a new startup requires email and founder name.
 4. Rank = count of valid videos. Tie-break: earlier first video wins.
-5. One community report removes the video **and** the entire startup from the board.
+5. Three public challenges on one video removes the video **and** the entire startup from the board.
 
 ## Stack
 
 - Cloudflare Workers (Hono API + SPA assets binding)
 - Cloudflare Email Service (outbound founder emails)
-- Cloudflare Workers AI (face detection on thumbnails)
 - D1 (`videoclub-db`)
 - Bun, Vite, React 19, Tailwind 4
 
@@ -76,7 +75,6 @@ Deploy runs after successful CI on `main` (or via workflow dispatch):
 **Cloudflare Worker (production)**
 
 - `send_email` binding (`EMAIL`) — configured in `wrangler.jsonc`
-- Workers AI binding (`AI`) — for thumbnail face checks
 - Email Service domain onboarded for `videoclub.lol`
 
 If the `EMAIL` binding is missing or send fails, submissions still work — emails are skipped and logged.
