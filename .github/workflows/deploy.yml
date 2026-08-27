@@ -41,15 +41,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Set DATAFAST_API_KEY Worker secret
-        run: |
-          if [ -n "$DATAFAST_API_KEY" ]; then
-            printf '%s' "$DATAFAST_API_KEY" | bunx wrangler secret put DATAFAST_API_KEY --env production
-          fi
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          DATAFAST_API_KEY: ${{ secrets.DATAFAST_API_KEY }}
-
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
