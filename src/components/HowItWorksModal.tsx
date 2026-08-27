@@ -1,15 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 
-const HOW_IT_WORKS_KEY = "videoclub.how-it-works";
 const EMAIL_PREFILL_KEY = "videoclub.email";
-
-export function getHowItWorksSeen(): boolean {
-  try {
-    return localStorage.getItem(HOW_IT_WORKS_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
 
 export function getPrefilledEmail(): string {
   try {
@@ -140,12 +131,4 @@ export function HowItWorksModal({ open, email, onEmailChange, onClose }: HowItWo
       </div>
     </div>
   );
-}
-
-export function markHowItWorksSeen(): void {
-  try {
-    localStorage.setItem(HOW_IT_WORKS_KEY, "1");
-  } catch {
-    // ignore
-  }
 }

@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router-dom";
-import {
-  getHowItWorksSeen,
-  getPrefilledEmail,
-  HowItWorksModal,
-  markHowItWorksSeen,
-} from "../components/HowItWorksModal";
+import { getPrefilledEmail, HowItWorksModal } from "../components/HowItWorksModal";
 import { LivePill } from "../components/LivePill";
+import { LiveVisitors } from "../components/LiveVisitors";
 import { RankCard } from "../components/RankCard";
 import {
   challengeVideo,
@@ -78,14 +74,7 @@ export function Home() {
     void loadBoard();
   }, [loadBoard]);
 
-  useEffect(() => {
-    if (!getHowItWorksSeen()) {
-      setHowItWorksOpen(true);
-    }
-  }, []);
-
   const closeHowItWorks = useCallback((savedEmail?: string) => {
-    markHowItWorksSeen();
     setHowItWorksOpen(false);
     if (savedEmail) {
       setEmail(savedEmail);
@@ -232,7 +221,10 @@ export function Home() {
         onClose={closeHowItWorks}
       />
 
-      <LivePill startupCount={entries.length} videoCount={totalVideos} />
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <LivePill startupCount={entries.length} videoCount={totalVideos} />
+        <LiveVisitors />
+      </div>
 
       <section className="mx-auto max-w-4xl space-y-4 pt-2 text-center">
         <h1 className="text-4xl font-bold leading-tight tracking-tight text-[#111] sm:text-5xl md:text-6xl">
