@@ -38,7 +38,6 @@ jobs:
 
       - name: Apply D1 migrations
         run: bunx wrangler d1 migrations apply videoclub-db --remote --env production
-        continue-on-error: true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
