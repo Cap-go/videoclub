@@ -58,8 +58,14 @@ export function Layout() {
             <Link to="/" className={linkClass("/")}>
               Leaderboard
             </Link>
+            <Link to="/feed" className={linkClass("/feed")}>
+              Feed
+            </Link>
             <Link to="/rules" className={linkClass("/rules")}>
               Rules
+            </Link>
+            <Link to="/manifesto" className={linkClass("/manifesto")}>
+              Manifesto
             </Link>
             <Link to="/about" className={linkClass("/about")}>
               About
@@ -75,8 +81,16 @@ export function Layout() {
       <footer className="border-t border-[#e8e4df] px-4 py-8 text-center text-sm text-[#6b7280]">
         <p className="font-medium text-[#111]">Rank is the videos — nothing else.</p>
         <p className="mt-2">
+          <Link to="/feed" className="hover:text-[#f4623a]">
+            Feed
+          </Link>
+          {" · "}
           <Link to="/rules" className="hover:text-[#f4623a]">
             Rules
+          </Link>
+          {" · "}
+          <Link to="/manifesto" className="hover:text-[#f4623a]">
+            Manifesto
           </Link>
           {" · "}
           <Link to="/about" className="hover:text-[#f4623a]">

@@ -1,11 +1,7 @@
+import { Link } from "react-router-dom";
 import { faviconUrl, type ChallengeReason, type LeaderboardEntry, type StartupVideo } from "../lib/api";
 import { formatDate, platformLabel, timeAgo } from "../lib/format";
-
-const CHALLENGE_OPTIONS: Array<{ value: ChallengeReason; label: string }> = [
-  { value: "ai", label: "AI video" },
-  { value: "not_founder", label: "Not the founder" },
-  { value: "not_real_product", label: "Not a real product" },
-];
+import { ChallengeControl } from "./ChallengeControl";
 
 interface RankCardProps {
   entry: LeaderboardEntry;
@@ -99,73 +95,48 @@ export function RankCard({
                   key={video.id}
                   className="flex flex-col gap-3 rounded-xl border border-[#e8e4df] bg-white p-3 sm:flex-row sm:items-center"
                 >
-                  {video.thumbnail ? (
-                    <img
-                      src={video.thumbnail}
-                      alt=""
-                      className="h-20 w-full rounded-xl object-cover sm:h-16 sm:w-28"
-                    />
-                  ) : (
-                    <div className="flex h-20 w-full items-center justify-center rounded-xl bg-[#f3f4f6] text-2xl text-[#9ca3af] sm:h-16 sm:w-28">
-                      ▶
+                  <Link
+                    to={`/feed#video-${video.id}`}
+                    className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center"
+                  >
+                    {video.thumbnail ? (
+                      <img
+                        src={video.thumbnail}
+                        alt=""
+                        className="h-20 w-full rounded-xl object-cover sm:h-16 sm:w-28"
+                      />
+                    ) : (
+                      <div className="flex h-20 w-full items-center justify-center rounded-xl bg-[#f3f4f6] text-2xl text-[#9ca3af] sm:h-16 sm:w-28">
+                        ▶
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-semibold text-[#111]">{video.title}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#9ca3af]">
+                        <span>{platformLabel(video.platform)}</span>
+                        {video.published_at && (
+                          <>
+                            <span>·</span>
+                            <span>published {formatDate(video.published_at)}</span>
+                          </>
+                        )}
+                        <span>·</span>
+                        <span>submitted {timeAgo(video.submitted_at)}</span>
+                        {video.challenge_count > 0 && (
+                          <>
+                            <span>·</span>
+                            <span className="font-medium text-[#b45309]">
+                              {video.challenge_count} challenge{video.challenge_count === 1 ? "" : "s"}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <span className="mt-1 inline-block text-sm font-medium text-[#f4623a] hover:underline">
+                        Watch in feed
+                      </span>
                     </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-semibold text-[#111]">{video.title}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#9ca3af]">
-                      <span>{platformLabel(video.platform)}</span>
-                      {video.published_at && (
-                        <>
-                          <span>·</span>
-                          <span>published {formatDate(video.published_at)}</span>
-                        </>
-                      )}
-                      <span>·</span>
-                      <span>submitted {timeAgo(video.submitted_at)}</span>
-                      {video.challenge_count > 0 && (
-                        <>
-                          <span>·</span>
-                          <span className="font-medium text-[#b45309]">
-                            {video.challenge_count} challenge{video.challenge_count === 1 ? "" : "s"}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    <a
-                      href={video.video_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-1 inline-block text-sm font-medium text-[#f4623a] hover:underline"
-                    >
-                      Watch
-                    </a>
-                  </div>
-                  <div className="flex shrink-0 flex-col gap-2 sm:items-end">
-                    <label className="sr-only" htmlFor={`challenge-${video.id}`}>
-                      Challenge reason
-                    </label>
-                    <select
-                      id={`challenge-${video.id}`}
-                      defaultValue="ai"
-                      className="rounded-xl border border-[#e8e4df] bg-white px-2 py-2 text-base text-[#374151] sm:text-xs"
-                    >
-                      {CHALLENGE_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        const select = e.currentTarget.parentElement?.querySelector("select");
-                        onChallenge(video.id, (select?.value ?? "ai") as ChallengeReason);
-                      }}
-                      className="rounded-xl border border-[#fcd4c4] bg-[#fff9f7] px-3 py-2 text-xs font-medium text-[#c2410c] transition hover:bg-[#ffe8df]"
-                    >
-                      Challenge
-                    </button>
-                  </div>
+                  </Link>
+                  <ChallengeControl videoId={video.id} onChallenge={onChallenge} />
                 </li>
               ))}
             </ul>

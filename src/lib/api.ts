@@ -23,6 +23,27 @@ export interface StartupVideo {
   challenge_count: number;
 }
 
+export interface FeedVideo {
+  id: number;
+  video_id: string | null;
+  video_url: string;
+  platform: string;
+  title: string;
+  thumbnail: string | null;
+  author: string | null;
+  published_at: string | null;
+  created_at: string;
+  submitted_at: string;
+  product_url: string;
+  startup: {
+    id: number;
+    name: string;
+    product_host: string;
+    rank: number | null;
+  };
+  challenge_count: number;
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -49,6 +70,12 @@ export function getStartupVideos(id: number) {
     startup: { id: number; name: string; product_url: string; product_host: string };
     videos: StartupVideo[];
   }>(`/api/startups/${id}/videos`);
+}
+
+export function getFeed(cursor?: string, limit = 30) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return api<{ videos: FeedVideo[]; nextCursor: string | null }>(`/api/feed?${params}`);
 }
 
 export function checkVideo(videoUrl: string) {

@@ -1,4 +1,4 @@
-import type { BoardPeriod, LeaderboardEntry, StartupRow, VideoRow } from "../types";
+import type { BoardPeriod, FeedVideoEntry, LeaderboardEntry, StartupRow, VideoRow } from "../types";
 
 export interface RankedStartup {
   id: number;
@@ -173,4 +173,72 @@ export async function getVideoByPlatformId(
 
 export async function getVideoById(db: D1Database, videoId: number): Promise<VideoRow | null> {
   return db.prepare("SELECT * FROM videos WHERE id = ?").bind(videoId).first<VideoRow>();
+}
+
+export async function getStartupRankMap(db: D1Database): Promise<Map<number, number>> {
+  const board = await getLeaderboard(db, "all");
+  return new Map(board.map((entry) => [entry.id, entry.rank]));
+}
+
+export async function getFeedVideos(
+  db: D1Database,
+  options: { limit?: number; cursor?: number } = {},
+): Promise<FeedVideoEntry[]> {
+  const limit = Math.min(Math.max(options.limit ?? 30, 1), 50);
+  const cursor = options.cursor;
+
+  let cursorClause = "";
+  const binds: Array<string | number> = [];
+
+  if (cursor && Number.isFinite(cursor)) {
+    const anchor = await db
+      .prepare("SELECT id, published_at, created_at FROM videos WHERE id = ?")
+      .bind(cursor)
+      .first<{ id: number; published_at: string | null; created_at: string }>();
+
+    if (anchor) {
+      const sortAt = anchor.published_at ?? anchor.created_at;
+      cursorClause = `AND (
+        COALESCE(v.published_at, v.created_at) < ?
+        OR (COALESCE(v.published_at, v.created_at) = ? AND v.id < ?)
+      )`;
+      binds.push(sortAt, sortAt, anchor.id);
+    }
+  }
+
+  const result = await db
+    .prepare(
+      `SELECT
+        v.id,
+        v.video_id,
+        v.platform,
+        v.video_url,
+        v.title,
+        v.thumbnail,
+        v.author,
+        v.published_at,
+        v.created_at,
+        v.product_url_found AS product_url,
+        s.id AS startup_id,
+        s.name AS startup_name,
+        s.product_host AS startup_host,
+        (SELECT COUNT(*) FROM challenges c WHERE c.video_id = v.id) AS challenge_count
+      FROM videos v
+      JOIN startups s ON s.id = v.startup_id
+      WHERE v.removed_at IS NULL
+        AND s.removed_at IS NULL
+        ${cursorClause}
+      ORDER BY COALESCE(v.published_at, v.created_at) DESC, v.id DESC
+      LIMIT ?`,
+    )
+    .bind(...binds, limit)
+    .all<Omit<FeedVideoEntry, "startup_rank">>();
+
+  const rankMap = await getStartupRankMap(db);
+
+  return (result.results ?? []).map((row) => ({
+    ...row,
+    challenge_count: Number(row.challenge_count),
+    startup_rank: rankMap.get(row.startup_id) ?? null,
+  }));
 }

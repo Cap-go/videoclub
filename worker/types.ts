@@ -48,6 +48,24 @@ export interface LeaderboardEntry {
   first_video_at: string;
 }
 
+export interface FeedVideoEntry {
+  id: number;
+  video_id: string | null;
+  platform: string;
+  video_url: string;
+  title: string;
+  thumbnail: string | null;
+  author: string | null;
+  published_at: string | null;
+  created_at: string;
+  product_url: string;
+  startup_id: number;
+  startup_name: string;
+  startup_host: string;
+  startup_rank: number | null;
+  challenge_count: number;
+}
+
 export interface VideoMetadata {
   platform: "youtube" | "tiktok" | "instagram";
   videoId: string;
