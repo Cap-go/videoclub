@@ -14,6 +14,12 @@ import {
   type StartupVideo,
 } from "../lib/api";
 
+const CHECK_DEBOUNCE_MS = 500;
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export function Home() {
   const { period } = useOutletContext<{ period: BoardPeriod }>();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
@@ -24,6 +30,7 @@ export function Home() {
 
   const [videoUrl, setVideoUrl] = useState("");
   const [email, setEmail] = useState("");
+  const [productFound, setProductFound] = useState(false);
   const [emailRequired, setEmailRequired] = useState(false);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -31,6 +38,21 @@ export function Home() {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [productPreview, setProductPreview] = useState<string | null>(null);
   const [foreignAccountWarning, setForeignAccountWarning] = useState<string | null>(null);
+
+  const resetCheckState = useCallback(() => {
+    setProductFound(false);
+    setEmailRequired(false);
+    setProductPreview(null);
+    setFormError(null);
+    setForeignAccountWarning(null);
+  }, []);
+
+  const canPost = useMemo(() => {
+    const url = videoUrl.trim();
+    if (!url || checking || submitting || !productFound) return false;
+    if (emailRequired && !isValidEmail(email)) return false;
+    return true;
+  }, [videoUrl, checking, submitting, productFound, emailRequired, email]);
 
   const loadBoard = useCallback(async () => {
     setLoading(true);
@@ -47,6 +69,50 @@ export function Home() {
   useEffect(() => {
     void loadBoard();
   }, [loadBoard]);
+
+  useEffect(() => {
+    const url = videoUrl.trim();
+    if (!url) {
+      setChecking(false);
+      resetCheckState();
+      return;
+    }
+
+    setProductFound(false);
+    setEmailRequired(false);
+    setProductPreview(null);
+    setFormError(null);
+    setForeignAccountWarning(null);
+    setChecking(true);
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await checkVideo(url);
+          if (result.error || !result.productFound) {
+            setFormError(result.error ?? "No product link found in the video description.");
+            setProductFound(false);
+            setEmailRequired(false);
+            setProductPreview(null);
+            return;
+          }
+          setFormError(null);
+          setProductFound(true);
+          setEmailRequired(result.emailRequired);
+          setProductPreview(result.productUrl ?? null);
+        } catch (err) {
+          setFormError(err instanceof Error ? err.message : "Check failed");
+          setProductFound(false);
+          setEmailRequired(false);
+          setProductPreview(null);
+        } finally {
+          setChecking(false);
+        }
+      })();
+    }, CHECK_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [videoUrl, resetCheckState]);
 
   const totalVideos = useMemo(
     () => entries.reduce((sum, entry) => sum + entry.video_count, 0),
@@ -73,34 +139,9 @@ export function Home() {
     }
   };
 
-  const handleVideoUrlBlur = async () => {
-    const url = videoUrl.trim();
-    if (!url) {
-      setEmailRequired(false);
-      setProductPreview(null);
-      return;
-    }
-    setChecking(true);
-    setFormError(null);
-    try {
-      const result = await checkVideo(url);
-      if (result.error) {
-        setFormError(result.error);
-        setEmailRequired(false);
-        setProductPreview(null);
-        return;
-      }
-      setEmailRequired(result.emailRequired);
-      setProductPreview(result.productUrl ?? null);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Check failed");
-    } finally {
-      setChecking(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent, force = false) => {
     e.preventDefault();
+    if (!canPost && !force) return;
     setFormError(null);
     setFormSuccess(null);
     if (!force) setForeignAccountWarning(null);
@@ -112,9 +153,7 @@ export function Home() {
       );
       setVideoUrl("");
       setEmail("");
-      setEmailRequired(false);
-      setProductPreview(null);
-      setForeignAccountWarning(null);
+      resetCheckState();
       await loadBoard();
     } catch (err) {
       const apiErr = err as Error & { code?: string };
@@ -187,31 +226,37 @@ export function Home() {
               <input
                 id="videoUrl"
                 type="url"
-                required
                 placeholder="Paste YouTube, TikTok, or Instagram URL"
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
-                onBlur={() => void handleVideoUrlBlur()}
                 className="w-full rounded-2xl border border-[#e8e4df] bg-white py-3.5 pl-10 pr-4 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20"
               />
             </div>
-            <input
-              id="email"
-              type="email"
-              required={emailRequired}
-              placeholder={emailRequired ? "Email (required)" : "Email (first time only)"}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:w-56"
-            />
             <button
               type="submit"
-              disabled={submitting || checking}
+              disabled={!canPost}
               className="shrink-0 rounded-2xl bg-[#f4623a] px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[#e8573a] disabled:opacity-50"
             >
               {submitting ? "Posting…" : "Post"}
             </button>
           </div>
+
+          {emailRequired && productFound && (
+            <div className="space-y-1">
+              <input
+                id="email"
+                type="email"
+                required
+                placeholder="Email for rank updates"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:max-w-md"
+              />
+              <p className="text-center text-sm text-[#6b7280] sm:text-left">
+                First time this startup is on the board — we need an email for rank updates.
+              </p>
+            </div>
+          )}
 
           {productPreview && (
             <p className="text-center text-sm text-[#6b7280]">
