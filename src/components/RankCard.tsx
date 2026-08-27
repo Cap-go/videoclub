@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { type ChallengeReason, type LeaderboardEntry, type StartupVideo } from "../lib/api";
+import { formatStatCount, rankCardShowsAboutLink } from "../lib/stats";
 import { formatDate, platformLabel, timeAgo } from "../lib/format";
 import { ChallengeControl } from "./ChallengeControl";
 import { ProductDomainLink } from "./ProductDomainLink";
@@ -12,6 +13,8 @@ interface RankCardProps {
   videos: StartupVideo[];
   onToggle: () => void;
   onChallenge: (videoId: number, reason: ChallengeReason) => void;
+  onEntryClickUpdate?: (startupId: number, clickCount: number) => void;
+  onSiteClickUpdate?: (totalClicks: number) => void;
 }
 
 export function RankCard({
@@ -21,9 +24,18 @@ export function RankCard({
   videos,
   onToggle,
   onChallenge,
+  onEntryClickUpdate,
+  onSiteClickUpdate,
 }: RankCardProps) {
   const isTopThree = entry.rank <= 3;
   const claimTarget = entry.rank === 1 ? entry.video_count + 1 : null;
+  const showAboutLink = rankCardShowsAboutLink(entry.name, entry.product_host);
+  const nameIsHost = !showAboutLink;
+
+  const handleClickRecorded = (clickCount: number, totalClicks: number) => {
+    onEntryClickUpdate?.(entry.id, clickCount);
+    onSiteClickUpdate?.(totalClicks);
+  };
 
   return (
     <div
@@ -48,19 +60,38 @@ export function RankCard({
         />
 
         <div className="min-w-0 flex-1">
-          <span className="block truncate text-base font-bold text-[#111] sm:text-lg">{entry.name}</span>
+          {nameIsHost ? (
+            <ProductDomainLink
+              href={entry.product_url}
+              host={entry.product_host}
+              startupId={entry.id}
+              onClickRecorded={handleClickRecorded}
+              className="block truncate text-base font-bold text-[#111] underline underline-offset-2 decoration-[#f4623a]/70 hover:decoration-[#f4623a] sm:text-lg"
+            />
+          ) : (
+            <span className="block truncate text-base font-bold text-[#111] sm:text-lg">{entry.name}</span>
+          )}
           <p className="mt-0.5 line-clamp-2 text-sm text-[#6b7280]">
-            {entry.video_count} founder video{entry.video_count === 1 ? "" : "s"} about{" "}
-            <ProductDomainLink href={entry.product_url} host={entry.product_host} />
+            {entry.video_count} founder video{entry.video_count === 1 ? "" : "s"}
+            {showAboutLink && (
+              <>
+                {" "}
+                about{" "}
+                <ProductDomainLink
+                  href={entry.product_url}
+                  host={entry.product_host}
+                  startupId={entry.id}
+                  onClickRecorded={handleClickRecorded}
+                />
+              </>
+            )}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#9ca3af]">
             <span>{timeAgo(entry.first_video_at)}</span>
             <span>·</span>
-            <ProductDomainLink
-              href={entry.product_url}
-              host={entry.product_host}
-              className="text-xs font-medium text-[#f4623a] underline underline-offset-2 decoration-[#f4623a]/70 hover:decoration-[#f4623a]"
-            />
+            <span>
+              {formatStatCount(entry.click_count, "click")} · {formatStatCount(entry.play_count, "play")}
+            </span>
             {claimTarget && entry.rank === 1 && (
               <>
                 <span>·</span>
@@ -118,6 +149,8 @@ export function RankCard({
                         )}
                         <span>·</span>
                         <span>submitted {timeAgo(video.submitted_at)}</span>
+                        <span>·</span>
+                        <span>{formatStatCount(video.play_count, "play")}</span>
                         {video.challenge_count > 0 && (
                           <>
                             <span>·</span>

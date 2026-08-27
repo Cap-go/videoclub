@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { type ChallengeReason, type FeedVideo } from "../lib/api";
+import { formatStatCount } from "../lib/stats";
 import { formatDate, platformLabel, timeAgo } from "../lib/format";
 import { ChallengeControl } from "./ChallengeControl";
 import { ProductDomainLink } from "./ProductDomainLink";
@@ -10,9 +11,22 @@ interface FeedCardProps {
   video: FeedVideo;
   eagerEmbed?: boolean;
   onChallenge: (videoId: number, reason: ChallengeReason) => void;
+  onPlayUpdate?: (
+    videoId: number,
+    playCount: number,
+    startupPlayCount: number,
+    totalPlays: number,
+  ) => void;
+  onClickUpdate?: (startupId: number, clickCount: number, totalClicks: number) => void;
 }
 
-export function FeedCard({ video, eagerEmbed = false, onChallenge }: FeedCardProps) {
+export function FeedCard({
+  video,
+  eagerEmbed = false,
+  onChallenge,
+  onPlayUpdate,
+  onClickUpdate,
+}: FeedCardProps) {
   const sortAt = video.published_at ?? video.submitted_at;
 
   return (
@@ -23,10 +37,14 @@ export function FeedCard({ video, eagerEmbed = false, onChallenge }: FeedCardPro
       <VideoEmbed
         platform={video.platform}
         videoId={video.video_id}
+        dbVideoId={video.id}
         videoUrl={video.video_url}
         title={video.title}
         thumbnail={video.thumbnail}
         eager={eagerEmbed}
+        onPlayRecorded={(playCount, startupPlayCount, totalPlays) => {
+          onPlayUpdate?.(video.id, playCount, startupPlayCount, totalPlays);
+        }}
       />
 
       <div className="space-y-3 p-4 sm:p-5">
@@ -55,6 +73,8 @@ export function FeedCard({ video, eagerEmbed = false, onChallenge }: FeedCardPro
                   <span>published {formatDate(video.published_at)}</span>
                 </>
               )}
+              <span>·</span>
+              <span>{formatStatCount(video.play_count, "play")}</span>
               {video.challenge_count > 0 && (
                 <>
                   <span>·</span>
@@ -69,7 +89,18 @@ export function FeedCard({ video, eagerEmbed = false, onChallenge }: FeedCardPro
 
         <div className="flex flex-col gap-3 border-t border-[#e8e4df] pt-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <ProductDomainLink href={video.product_url} host={video.startup.product_host} />
+            <ProductDomainLink
+              href={video.product_url}
+              host={video.startup.product_host}
+              startupId={video.startup.id}
+              onClickRecorded={(clickCount, totalClicks) => {
+                onClickUpdate?.(video.startup.id, clickCount, totalClicks);
+              }}
+            />
+            <span className="text-xs text-[#9ca3af]">
+              {formatStatCount(video.startup.click_count, "click")} ·{" "}
+              {formatStatCount(video.startup.play_count, "play")}
+            </span>
             <Link to="/" className="text-[#6b7280] hover:text-[#111]">
               Leaderboard
             </Link>

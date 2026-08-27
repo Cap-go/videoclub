@@ -4,6 +4,7 @@ import {
   getFeedVideos,
   getLeaderboard,
   getLockedPlatformAccount,
+  getSiteStats,
   getStartupByHostIncludingRemoved,
   getStartupById,
   getStartupRank,
@@ -11,6 +12,8 @@ import {
   getVideoByPlatformId,
   getVideosWithChallengeCounts,
   hasChallengedVideo,
+  incrementStartupClick,
+  incrementVideoPlay,
 } from "../db/queries";
 import { buildEmailContent, EMAIL_PREVIEW_FIXTURES } from "../lib/email-templates";
 import { notifyRankChange, sendEmail } from "../lib/email";
@@ -95,8 +98,11 @@ api.get("/logo/:host", async (c) => {
 
 api.get("/leaderboard", async (c) => {
   const period = parsePeriod(c.req.query("period"));
-  const entries = await getLeaderboard(c.env.DB, period);
-  return c.json({ period, entries });
+  const [entries, stats] = await Promise.all([
+    getLeaderboard(c.env.DB, period),
+    getSiteStats(c.env.DB),
+  ]);
+  return c.json({ period, entries, ...stats });
 });
 
 api.get("/feed", async (c) => {
@@ -109,6 +115,8 @@ api.get("/feed", async (c) => {
     limit: pageLimit,
     cursor: cursor && Number.isFinite(cursor) ? cursor : undefined,
   });
+
+  const stats = await getSiteStats(c.env.DB);
 
   const nextCursor =
     videos.length === pageLimit && videos.length > 0 ? String(videos[videos.length - 1]!.id) : null;
@@ -126,15 +134,19 @@ api.get("/feed", async (c) => {
       created_at: v.created_at,
       submitted_at: v.created_at,
       product_url: v.product_url,
+      play_count: v.play_count,
       startup: {
         id: v.startup_id,
         name: v.startup_name,
         product_host: v.startup_host,
         rank: v.startup_rank,
+        click_count: v.startup_click_count,
+        play_count: v.startup_play_count,
       },
       challenge_count: v.challenge_count,
     })),
     nextCursor,
+    ...stats,
   });
 });
 
@@ -162,6 +174,8 @@ api.get("/startups/:id/videos", async (c) => {
       name: startup.name,
       product_url: startup.product_url,
       product_host: startup.product_host,
+      click_count: startup.click_count,
+      play_count: startup.play_count,
     },
     videos: videos.map((v) => ({
       id: v.id,
@@ -172,7 +186,35 @@ api.get("/startups/:id/videos", async (c) => {
       published_at: v.published_at,
       submitted_at: v.created_at,
       challenge_count: v.challenge_count,
+      play_count: v.play_count,
     })),
+  });
+});
+
+api.post("/startups/:id/click", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ error: "Invalid startup id" }, 400);
+
+  const result = await incrementStartupClick(c.env.DB, id);
+  if (!result) return c.json({ error: "Startup not found" }, 404);
+
+  const stats = await getSiteStats(c.env.DB);
+  return c.json({ ok: true, click_count: result.click_count, ...stats });
+});
+
+api.post("/videos/:id/play", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ error: "Invalid video id" }, 400);
+
+  const result = await incrementVideoPlay(c.env.DB, id);
+  if (!result) return c.json({ error: "Video not found" }, 404);
+
+  const stats = await getSiteStats(c.env.DB);
+  return c.json({
+    ok: true,
+    play_count: result.play_count,
+    startup_play_count: result.startup_play_count,
+    ...stats,
   });
 });
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { recordVideoPlay } from "../lib/stats";
 import {
   buildEmbedInfo,
   X_EMBED_SHELL_CLASS,
@@ -11,26 +12,40 @@ import {
 interface VideoEmbedProps {
   platform: string;
   videoId: string | null;
+  dbVideoId: number;
   videoUrl: string;
   title: string;
   thumbnail: string | null;
   eager?: boolean;
+  onPlayRecorded?: (playCount: number, startupPlayCount: number, totalPlays: number) => void;
 }
 
 let activeYoutubeStop: (() => void) | null = null;
 
+function trackPlay(dbVideoId: number, onPlayRecorded?: VideoEmbedProps["onPlayRecorded"]) {
+  void recordVideoPlay(dbVideoId).then((result) => {
+    if (result) {
+      onPlayRecorded?.(result.play_count, result.startup_play_count, result.total_plays);
+    }
+  });
+}
+
 function YouTubeClickToPlay({
+  dbVideoId,
   videoId,
   title,
   thumbnail,
   watchUrl,
   eager,
+  onPlayRecorded,
 }: {
+  dbVideoId: number;
   videoId: string;
   title: string;
   thumbnail: string | null;
   watchUrl: string;
   eager?: boolean;
+  onPlayRecorded?: VideoEmbedProps["onPlayRecorded"];
 }) {
   const [playing, setPlaying] = useState(false);
   const poster = thumbnail ?? youtubePosterUrl(videoId);
@@ -39,6 +54,7 @@ function YouTubeClickToPlay({
     activeYoutubeStop?.();
     const stop = () => setPlaying(false);
     activeYoutubeStop = stop;
+    trackPlay(dbVideoId, onPlayRecorded);
     setPlaying(true);
   };
 
@@ -102,19 +118,29 @@ function YouTubeClickToPlay({
 }
 
 function XClickToPlay({
+  dbVideoId,
   embedUrl,
   title,
   thumbnail,
   watchUrl,
   eager,
+  onPlayRecorded,
 }: {
+  dbVideoId: number;
   embedUrl: string;
   title: string;
   thumbnail: string | null;
   watchUrl: string;
   eager?: boolean;
+  onPlayRecorded?: VideoEmbedProps["onPlayRecorded"];
 }) {
   const [playing, setPlaying] = useState(!thumbnail);
+
+  useEffect(() => {
+    if (playing && !thumbnail) {
+      trackPlay(dbVideoId, onPlayRecorded);
+    }
+  }, [dbVideoId, onPlayRecorded, playing, thumbnail]);
 
   if (!playing && thumbnail) {
     return (
@@ -127,7 +153,10 @@ function XClickToPlay({
         />
         <button
           type="button"
-          onClick={() => setPlaying(true)}
+          onClick={() => {
+            trackPlay(dbVideoId, onPlayRecorded);
+            setPlaying(true);
+          }}
           aria-label={`Play ${title}`}
           className="absolute inset-0 flex items-center justify-center bg-black/30 transition hover:bg-black/40"
         >
@@ -169,17 +198,62 @@ function XClickToPlay({
   );
 }
 
-export function VideoEmbed({ platform, videoId, title, thumbnail, videoUrl, eager = false }: VideoEmbedProps) {
+function AutoPlayEmbed({
+  dbVideoId,
+  embedUrl,
+  title,
+  aspectClass,
+  eager,
+  onPlayRecorded,
+}: {
+  dbVideoId: number;
+  embedUrl: string;
+  title: string;
+  aspectClass: string;
+  eager?: boolean;
+  onPlayRecorded?: VideoEmbedProps["onPlayRecorded"];
+}) {
+  const handleLoad = () => {
+    trackPlay(dbVideoId, onPlayRecorded);
+  };
+
+  return (
+    <div className={`relative w-full overflow-hidden rounded-xl bg-black ${aspectClass}`}>
+      <iframe
+        src={embedUrl}
+        title={title}
+        loading={eager ? "eager" : "lazy"}
+        onLoad={handleLoad}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        className="absolute inset-0 h-full w-full border-0"
+      />
+    </div>
+  );
+}
+
+export function VideoEmbed({
+  platform,
+  videoId,
+  dbVideoId,
+  title,
+  thumbnail,
+  videoUrl,
+  eager = false,
+  onPlayRecorded,
+}: VideoEmbedProps) {
   const embed = buildEmbedInfo(platform, videoId ?? "", videoUrl);
 
   if (platform === "youtube" && videoId) {
     return (
       <YouTubeClickToPlay
+        dbVideoId={dbVideoId}
         videoId={videoId}
         title={title}
         thumbnail={thumbnail}
         watchUrl={embed.watchUrl}
         eager={eager}
+        onPlayRecorded={onPlayRecorded}
       />
     );
   }
@@ -187,11 +261,13 @@ export function VideoEmbed({ platform, videoId, title, thumbnail, videoUrl, eage
   if (platform === "x" && embed.mode === "iframe" && embed.embedUrl) {
     return (
       <XClickToPlay
+        dbVideoId={dbVideoId}
         embedUrl={embed.embedUrl}
         title={title}
         thumbnail={thumbnail}
         watchUrl={embed.watchUrl}
         eager={eager}
+        onPlayRecorded={onPlayRecorded}
       />
     );
   }
@@ -201,16 +277,14 @@ export function VideoEmbed({ platform, videoId, title, thumbnail, videoUrl, eage
       platform === "tiktok" ? "aspect-[9/16] max-h-[640px]" : "aspect-video";
 
     return (
-      <div className={`relative w-full overflow-hidden rounded-xl bg-black ${aspectClass}`}>
-        <iframe
-          src={embed.embedUrl}
-          title={title}
-          loading={eager ? "eager" : "lazy"}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-          className="absolute inset-0 h-full w-full border-0"
-        />
-      </div>
+      <AutoPlayEmbed
+        dbVideoId={dbVideoId}
+        embedUrl={embed.embedUrl}
+        title={title}
+        aspectClass={aspectClass}
+        eager={eager}
+        onPlayRecorded={onPlayRecorded}
+      />
     );
   }
 

@@ -26,6 +26,8 @@ const CHECK_DEBOUNCE_MS = 500;
 export function Home() {
   const { period } = useOutletContext<{ period: BoardPeriod }>();
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [totalClicks, setTotalClicks] = useState(0);
+  const [totalPlays, setTotalPlays] = useState(0);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [expandedVideos, setExpandedVideos] = useState<StartupVideo[]>([]);
@@ -66,6 +68,8 @@ export function Home() {
     try {
       const data = await getLeaderboard(period);
       setEntries(data.entries);
+      setTotalClicks(data.total_clicks);
+      setTotalPlays(data.total_plays);
     } catch {
       setEntries([]);
     } finally {
@@ -240,7 +244,12 @@ export function Home() {
       />
 
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <LivePill startupCount={entries.length} videoCount={totalVideos} />
+        <LivePill
+          startupCount={entries.length}
+          videoCount={totalVideos}
+          totalClicks={totalClicks}
+          totalPlays={totalPlays}
+        />
         <LiveVisitors />
       </div>
 
@@ -385,6 +394,14 @@ export function Home() {
                   videos={expandedId === entry.id ? expandedVideos : []}
                   onToggle={() => void toggleRow(entry)}
                   onChallenge={(id, reason) => void handleChallenge(id, reason)}
+                  onEntryClickUpdate={(startupId, clickCount) => {
+                    setEntries((prev) =>
+                      prev.map((item) =>
+                        item.id === startupId ? { ...item, click_count: clickCount } : item,
+                      ),
+                    );
+                  }}
+                  onSiteClickUpdate={setTotalClicks}
                 />
               ))}
             </div>

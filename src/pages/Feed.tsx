@@ -88,6 +88,40 @@ export function Feed() {
     }
   };
 
+  const handlePlayUpdate = (
+    videoId: number,
+    playCount: number,
+    startupPlayCount: number,
+    totalPlays: number,
+  ) => {
+    setVideos((prev) =>
+      prev.map((item) =>
+        item.id === videoId
+          ? {
+              ...item,
+              play_count: playCount,
+              startup: { ...item.startup, play_count: startupPlayCount },
+            }
+          : item,
+      ),
+    );
+    void totalPlays;
+  };
+
+  const handleClickUpdate = (startupId: number, clickCount: number, totalClicks: number) => {
+    setVideos((prev) =>
+      prev.map((item) =>
+        item.startup.id === startupId
+          ? {
+              ...item,
+              startup: { ...item.startup, click_count: clickCount },
+            }
+          : item,
+      ),
+    );
+    void totalClicks;
+  };
+
   return (
     <div className="space-y-8">
       <section className="mx-auto max-w-3xl space-y-3 text-center">
@@ -118,6 +152,8 @@ export function Feed() {
               video={video}
               eagerEmbed={index < 4}
               onChallenge={(id, reason) => void handleChallenge(id, reason)}
+              onPlayUpdate={handlePlayUpdate}
+              onClickUpdate={handleClickUpdate}
             />
           ))}
 

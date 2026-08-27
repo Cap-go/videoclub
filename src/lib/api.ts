@@ -10,6 +10,8 @@ export interface LeaderboardEntry {
   product_host: string;
   video_count: number;
   first_video_at: string;
+  click_count: number;
+  play_count: number;
 }
 
 export interface StartupVideo {
@@ -21,6 +23,7 @@ export interface StartupVideo {
   published_at: string | null;
   submitted_at: string;
   challenge_count: number;
+  play_count: number;
 }
 
 export interface FeedVideo {
@@ -35,11 +38,14 @@ export interface FeedVideo {
   created_at: string;
   submitted_at: string;
   product_url: string;
+  play_count: number;
   startup: {
     id: number;
     name: string;
     product_host: string;
     rank: number | null;
+    click_count: number;
+    play_count: number;
   };
   challenge_count: number;
 }
@@ -66,14 +72,24 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function getLeaderboard(period: BoardPeriod = "all") {
-  return api<{ period: BoardPeriod; entries: LeaderboardEntry[] }>(
-    `/api/leaderboard?period=${period}`,
-  );
+  return api<{
+    period: BoardPeriod;
+    entries: LeaderboardEntry[];
+    total_clicks: number;
+    total_plays: number;
+  }>(`/api/leaderboard?period=${period}`);
 }
 
 export function getStartupVideos(id: number) {
   return api<{
-    startup: { id: number; name: string; product_url: string; product_host: string };
+    startup: {
+      id: number;
+      name: string;
+      product_url: string;
+      product_host: string;
+      click_count: number;
+      play_count: number;
+    };
     videos: StartupVideo[];
   }>(`/api/startups/${id}/videos`);
 }
@@ -81,7 +97,12 @@ export function getStartupVideos(id: number) {
 export function getFeed(cursor?: string, limit = 30) {
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set("cursor", cursor);
-  return api<{ videos: FeedVideo[]; nextCursor: string | null }>(`/api/feed?${params}`);
+  return api<{
+    videos: FeedVideo[];
+    nextCursor: string | null;
+    total_clicks: number;
+    total_plays: number;
+  }>(`/api/feed?${params}`);
 }
 
 export function checkVideo(videoUrl: string) {
