@@ -1,11 +1,10 @@
 import type { VideoMetadata } from "../types";
 import { resolvePlatformAccount } from "./platform-account";
+import { type ProxiedFetchBindings, proxiedFetch } from "./proxied-fetch";
 import { detectPlatform, extractPlatformVideoId, normalizeVideoUrl, type VideoPlatform } from "./urls";
 
 const CHROME_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
-
-const USER_AGENT = CHROME_USER_AGENT;
 
 /** Required on ANDROID/IOS player requests or YouTube returns "video unavailable". */
 const INNERTUBE_PLAYER_PARAMS = "CgIQBg==";
@@ -16,13 +15,21 @@ const YOUTUBE_BLOCKED_MESSAGE =
 const YOUTUBE_EMPTY_MESSAGE =
   "We couldn't read the video description. Add a product link in the description and try again.";
 
-interface FetchVideoMetadataOptions {
-  youtubeApiKey?: string;
+export interface VideoFetchBindings extends ProxiedFetchBindings {
+  YOUTUBE_API_KEY?: string;
+}
+
+interface OembedResult {
+  title?: string;
+  description?: string;
+  thumbnail?: string;
+  author?: string;
+  authorUrl?: string;
 }
 
 export async function fetchVideoMetadata(
   videoUrl: string,
-  options?: FetchVideoMetadataOptions,
+  bindings: VideoFetchBindings = {},
 ): Promise<VideoMetadata> {
   const platform = detectPlatform(videoUrl);
   if (!platform) {
@@ -35,41 +42,41 @@ export async function fetchVideoMetadata(
   }
 
   const normalizedUrl = normalizeVideoUrl(videoUrl, platform);
-  const oembed = await fetchOembed(normalizedUrl, platform);
+  const oembed = await fetchOembed(normalizedUrl, platform, bindings);
   let noembed: OembedResult = {};
   let description = oembed.description ?? "";
   let publishedAt: string | null = null;
   let youtubeBlocked = false;
 
   if (platform === "youtube") {
-    const innertube = await fetchYouTubeInnertubeDetails(videoId);
+    const innertube = await fetchYouTubeInnertubeDetails(videoId, bindings);
     if (innertube.description) description = innertube.description;
     if (innertube.publishedAt) publishedAt = innertube.publishedAt;
     youtubeBlocked = innertube.blocked;
 
     if (!description.trim()) {
-      const page = await fetchYouTubePageDetails(videoId, normalizedUrl);
+      const page = await fetchYouTubePageDetails(videoId, normalizedUrl, bindings);
       if (page.description) description = page.description;
       publishedAt = publishedAt ?? page.publishedAt;
       youtubeBlocked = youtubeBlocked || page.blocked;
     }
 
-    if (!description.trim() && options?.youtubeApiKey) {
-      const api = await fetchYouTubeDataApiDetails(videoId, options.youtubeApiKey);
+    if (!description.trim() && bindings.YOUTUBE_API_KEY) {
+      const api = await fetchYouTubeDataApiDetails(videoId, bindings.YOUTUBE_API_KEY, bindings);
       if (api.description) description = api.description;
       publishedAt = publishedAt ?? api.publishedAt;
     }
   } else if (!description.trim()) {
-    const page = await fetchPageDetails(normalizedUrl, platform);
+    const page = await fetchPageDetails(normalizedUrl, platform, bindings);
     description = page.description;
     publishedAt = page.publishedAt;
   } else {
-    const page = await fetchPageDetails(normalizedUrl, platform);
+    const page = await fetchPageDetails(normalizedUrl, platform, bindings);
     publishedAt = page.publishedAt;
   }
 
   if (!description.trim()) {
-    noembed = await fetchNoembed(normalizedUrl);
+    noembed = await fetchNoembed(normalizedUrl, bindings);
     description = noembed.description ?? description;
   }
 
@@ -94,15 +101,11 @@ export async function fetchVideoMetadata(
   };
 }
 
-interface OembedResult {
-  title?: string;
-  description?: string;
-  thumbnail?: string;
-  author?: string;
-  authorUrl?: string;
-}
-
-async function fetchOembed(url: string, platform: VideoPlatform): Promise<OembedResult> {
+async function fetchOembed(
+  url: string,
+  platform: VideoPlatform,
+  bindings: VideoFetchBindings,
+): Promise<OembedResult> {
   const endpoints: Record<VideoPlatform, string> = {
     youtube: `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
     tiktok: `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`,
@@ -110,45 +113,45 @@ async function fetchOembed(url: string, platform: VideoPlatform): Promise<Oembed
   };
 
   try {
-    const res = await fetch(endpoints[platform], {
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
+    const { response: res } = await proxiedFetch(endpoints[platform], bindings, {
+      init: { headers: { Accept: "application/json" } },
     });
     if (!res.ok) return {};
     const data = (await res.json()) as Record<string, unknown>;
-    return {
-      title: typeof data.title === "string" ? data.title : undefined,
-      description: typeof data.description === "string" ? data.description : undefined,
-      thumbnail:
-        typeof data.thumbnail_url === "string"
-          ? data.thumbnail_url
-          : typeof data.thumbnail === "string"
-            ? data.thumbnail
-            : undefined,
-      author: typeof data.author_name === "string" ? data.author_name : undefined,
-      authorUrl: typeof data.author_url === "string" ? data.author_url : undefined,
-    };
+    return parseOembedJson(data);
   } catch {
     return {};
   }
 }
 
-async function fetchNoembed(url: string): Promise<OembedResult> {
+async function fetchNoembed(url: string, bindings: VideoFetchBindings): Promise<OembedResult> {
   try {
-    const res = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(url)}`, {
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
-    });
+    const { response: res } = await proxiedFetch(
+      `https://noembed.com/embed?url=${encodeURIComponent(url)}`,
+      bindings,
+      { init: { headers: { Accept: "application/json" } } },
+    );
     if (!res.ok) return {};
     const data = (await res.json()) as Record<string, unknown>;
-    return {
-      title: typeof data.title === "string" ? data.title : undefined,
-      description: typeof data.description === "string" ? data.description : undefined,
-      thumbnail: typeof data.thumbnail_url === "string" ? data.thumbnail_url : undefined,
-      author: typeof data.author_name === "string" ? data.author_name : undefined,
-      authorUrl: typeof data.author_url === "string" ? data.author_url : undefined,
-    };
+    return parseOembedJson(data);
   } catch {
     return {};
   }
+}
+
+function parseOembedJson(data: Record<string, unknown>): OembedResult {
+  return {
+    title: typeof data.title === "string" ? data.title : undefined,
+    description: typeof data.description === "string" ? data.description : undefined,
+    thumbnail:
+      typeof data.thumbnail_url === "string"
+        ? data.thumbnail_url
+        : typeof data.thumbnail === "string"
+          ? data.thumbnail
+          : undefined,
+    author: typeof data.author_name === "string" ? data.author_name : undefined,
+    authorUrl: typeof data.author_url === "string" ? data.author_url : undefined,
+  };
 }
 
 interface InnertubeClientConfig {
@@ -236,6 +239,7 @@ export function parseInnertubePlayerResponse(data: Record<string, unknown>): {
 
 async function fetchYouTubeInnertubeDetails(
   videoId: string,
+  bindings: VideoFetchBindings,
 ): Promise<{ description: string; publishedAt: string | null; blocked: boolean }> {
   let blocked = false;
 
@@ -250,7 +254,7 @@ async function fetchYouTubeInnertubeDetails(
       };
       if (config.params) body.params = config.params;
 
-      const res = await fetch("https://www.youtube.com/youtubei/v1/player", {
+      const requestInit: RequestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -259,12 +263,31 @@ async function fetchYouTubeInnertubeDetails(
           "Accept-Language": "en-US,en;q=0.9",
         },
         body: JSON.stringify(body),
-      });
+      };
+
+      let { response: res, layer } = await proxiedFetch(
+        "https://www.youtube.com/youtubei/v1/player",
+        bindings,
+        { init: requestInit },
+      );
       if (!res.ok) continue;
 
-      const data = (await res.json()) as Record<string, unknown>;
-      const parsed = parseInnertubePlayerResponse(data);
+      let data = (await res.json()) as Record<string, unknown>;
+      let parsed = parseInnertubePlayerResponse(data);
       blocked = blocked || parsed.blocked;
+
+      if (!parsed.description.trim() && layer === "direct") {
+        const retry = await proxiedFetch("https://www.youtube.com/youtubei/v1/player", bindings, {
+          forceProxy: true,
+          init: requestInit,
+        });
+        if (retry.response.ok) {
+          res = retry.response;
+          data = (await res.json()) as Record<string, unknown>;
+          parsed = parseInnertubePlayerResponse(data);
+          blocked = blocked || parsed.blocked;
+        }
+      }
 
       if (parsed.description.trim()) {
         return parsed;
@@ -280,6 +303,7 @@ async function fetchYouTubeInnertubeDetails(
 async function fetchYouTubeDataApiDetails(
   videoId: string,
   apiKey: string,
+  bindings: VideoFetchBindings,
 ): Promise<{ description: string; publishedAt: string | null }> {
   try {
     const url = new URL("https://www.googleapis.com/youtube/v3/videos");
@@ -287,8 +311,8 @@ async function fetchYouTubeDataApiDetails(
     url.searchParams.set("id", videoId);
     url.searchParams.set("key", apiKey);
 
-    const res = await fetch(url.toString(), {
-      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
+    const { response: res } = await proxiedFetch(url.toString(), bindings, {
+      init: { headers: { Accept: "application/json" } },
     });
     if (!res.ok) return { description: "", publishedAt: null };
 
@@ -308,16 +332,13 @@ async function fetchYouTubeDataApiDetails(
 async function fetchYouTubePageDetails(
   videoId: string,
   watchUrl: string,
+  bindings: VideoFetchBindings,
 ): Promise<{ description: string; publishedAt: string | null; blocked: boolean }> {
-  const urls = [
-    watchUrl,
-    `https://www.youtube.com/shorts/${videoId}`,
-  ];
-
+  const urls = [watchUrl, `https://www.youtube.com/shorts/${videoId}`];
   let blocked = false;
 
   for (const url of urls) {
-    const res = await fetch(url, {
+    const requestInit: RequestInit = {
       headers: {
         "User-Agent": CHROME_USER_AGENT,
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -325,7 +346,9 @@ async function fetchYouTubePageDetails(
         Cookie: "CONSENT=YES+cb.20210328-17-p0.en+FX+667",
       },
       redirect: "follow",
-    });
+    };
+
+    let { response: res, layer } = await proxiedFetch(url, bindings, { init: requestInit });
 
     if (res.status === 429) {
       blocked = true;
@@ -333,28 +356,51 @@ async function fetchYouTubePageDetails(
     }
     if (!res.ok) continue;
 
-    const html = await res.text();
+    let html = await res.text();
     if (/consent\.youtube\.com|Sign in to confirm/i.test(html)) {
       blocked = true;
     }
 
-    const playerResponse = extractYtInitialPlayerResponse(html);
-    if (playerResponse) {
-      const parsed = parseInnertubePlayerResponse(playerResponse);
-      blocked = blocked || parsed.blocked;
-      if (parsed.description.trim()) {
-        return parsed;
+    let result = parseYouTubeHtmlPage(html, blocked);
+    blocked = result.blocked;
+
+    if (!result.description.trim() && layer === "direct") {
+      const retry = await proxiedFetch(url, bindings, { forceProxy: true, init: requestInit });
+      if (retry.response.ok) {
+        res = retry.response;
+        html = await res.text();
+        if (/consent\.youtube\.com|Sign in to confirm/i.test(html)) {
+          blocked = true;
+        }
+        result = parseYouTubeHtmlPage(html, blocked);
+        blocked = result.blocked;
       }
     }
 
-    const description = parseDescriptionFromHtml(html, "youtube");
-    const publishedAt = parsePublishedAtFromHtml(html, "youtube");
-    if (description.trim()) {
-      return { description, publishedAt, blocked };
+    if (result.description.trim()) {
+      return result;
     }
   }
 
   return { description: "", publishedAt: null, blocked };
+}
+
+function parseYouTubeHtmlPage(
+  html: string,
+  blocked: boolean,
+): { description: string; publishedAt: string | null; blocked: boolean } {
+  const playerResponse = extractYtInitialPlayerResponse(html);
+  if (playerResponse) {
+    const parsed = parseInnertubePlayerResponse(playerResponse);
+    if (parsed.description.trim()) {
+      return { ...parsed, blocked: blocked || parsed.blocked };
+    }
+    blocked = blocked || parsed.blocked;
+  }
+
+  const description = parseDescriptionFromHtml(html, "youtube");
+  const publishedAt = parsePublishedAtFromHtml(html, "youtube");
+  return { description, publishedAt, blocked };
 }
 
 function extractYtInitialPlayerResponse(html: string): Record<string, unknown> | null {
@@ -387,19 +433,32 @@ function extractYtInitialPlayerResponse(html: string): Record<string, unknown> |
 async function fetchPageDetails(
   url: string,
   platform: VideoPlatform,
+  bindings: VideoFetchBindings,
 ): Promise<{ description: string; publishedAt: string | null }> {
-  const res = await fetch(url, {
+  const requestInit: RequestInit = {
     headers: {
-      "User-Agent": USER_AGENT,
       Accept: "text/html,application/xhtml+xml",
       "Accept-Language": "en-US,en;q=0.9",
     },
     redirect: "follow",
-  });
+  };
+
+  let { response: res, layer } = await proxiedFetch(url, bindings, { init: requestInit });
   if (!res.ok) return { description: "", publishedAt: null };
-  const html = await res.text();
+
+  let html = await res.text();
+  let description = parseDescriptionFromHtml(html, platform);
+
+  if (!description.trim() && layer === "direct") {
+    const retry = await proxiedFetch(url, bindings, { forceProxy: true, init: requestInit });
+    if (retry.response.ok) {
+      html = await retry.response.text();
+      description = parseDescriptionFromHtml(html, platform);
+    }
+  }
+
   return {
-    description: parseDescriptionFromHtml(html, platform),
+    description,
     publishedAt: parsePublishedAtFromHtml(html, platform),
   };
 }

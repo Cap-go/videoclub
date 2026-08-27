@@ -12,6 +12,9 @@
     "binding": "ASSETS"
   },
   "send_email": [{ "name": "EMAIL" }],
+  "browser": {
+    "binding": "BROWSER"
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -41,6 +44,9 @@
         }
       ],
       "send_email": [{ "name": "EMAIL" }],
+      "browser": {
+        "binding": "BROWSER"
+      },
       "d1_databases": [
         {
           "binding": "DB",
