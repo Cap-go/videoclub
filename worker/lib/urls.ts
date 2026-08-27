@@ -40,6 +40,8 @@ export function normalizeProductUrl(input: string): string | null {
 }
 
 const URL_REGEX = /https?:\/\/[^\s<>"')\]}]+/gi;
+const BARE_DOMAIN_REGEX =
+  /(?:^|[\s([{"'])((?:www\.)?[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+(?::\d+)?(?:\/[^\s<>"')\]}]*)?)/gi;
 
 function cleanUrl(raw: string): string {
   return raw.replace(/[.,;:!?)}\]]+$/g, "");
@@ -50,16 +52,28 @@ function isBlockedProductUrl(urlStr: string): boolean {
   return !host;
 }
 
+function tryNormalizeProductUrl(candidate: string): string | null {
+  const cleaned = cleanUrl(candidate);
+  if (!cleaned || isBlockedProductUrl(cleaned)) return null;
+  return normalizeProductUrl(cleaned);
+}
+
 export function extractProductUrl(description: string): string | null {
   if (!description) return null;
-  const matches = description.match(URL_REGEX) ?? [];
-  for (const match of matches) {
-    const cleaned = cleanUrl(match);
-    if (!isBlockedProductUrl(cleaned)) {
-      const normalized = normalizeProductUrl(cleaned);
-      if (normalized) return normalized;
-    }
+
+  const explicitMatches = description.match(URL_REGEX) ?? [];
+  for (const match of explicitMatches) {
+    const normalized = tryNormalizeProductUrl(match);
+    if (normalized) return normalized;
   }
+
+  for (const match of description.matchAll(BARE_DOMAIN_REGEX)) {
+    const domain = match[1];
+    if (!domain || domain.includes("@")) continue;
+    const normalized = tryNormalizeProductUrl(domain);
+    if (normalized) return normalized;
+  }
+
   return null;
 }
 

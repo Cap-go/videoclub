@@ -27,6 +27,10 @@ export function emailShell(title: string, body: string, boardUrl: string): strin
       <p style="margin:28px 0 0;">
         <a href="${escapeHtml(boardUrl)}" style="display:inline-block;background:${ACCENT};color:#ffffff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:12px;">View the board →</a>
       </p>
+      <p style="margin:24px 0 0;font-size:12px;color:${MUTED};text-align:center;">
+        Made by <a href="https://x.com/martindonadieu" style="color:${MUTED};text-decoration:underline;">@martindonadieu</a>.
+        Main startup: <a href="https://capgo.app" style="color:${MUTED};text-decoration:underline;">Capgo</a>.
+      </p>
     </div>
   </div>
 </body></html>`;

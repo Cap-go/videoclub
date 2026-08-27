@@ -21,7 +21,16 @@ export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadat
   let description = oembed.description ?? "";
   let publishedAt: string | null = null;
 
-  if (!description.trim()) {
+  if (platform === "youtube") {
+    const innertube = await fetchYouTubeInnertubeDetails(videoId);
+    if (innertube.description) description = innertube.description;
+    if (innertube.publishedAt) publishedAt = innertube.publishedAt;
+    if (!description.trim()) {
+      const page = await fetchPageDetails(normalizedUrl, platform);
+      description = page.description;
+      publishedAt = publishedAt ?? page.publishedAt;
+    }
+  } else if (!description.trim()) {
     const page = await fetchPageDetails(normalizedUrl, platform);
     description = page.description;
     publishedAt = page.publishedAt;
@@ -107,6 +116,54 @@ async function fetchNoembed(url: string): Promise<OembedResult> {
   }
 }
 
+async function fetchYouTubeInnertubeDetails(
+  videoId: string,
+): Promise<{ description: string; publishedAt: string | null }> {
+  const clients = [
+    { clientName: "ANDROID", clientVersion: "20.10.38" },
+    { clientName: "WEB", clientVersion: "2.20240101.00.00" },
+  ];
+
+  for (const client of clients) {
+    try {
+      const res = await fetch("https://www.youtube.com/youtubei/v1/player", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": USER_AGENT,
+        },
+        body: JSON.stringify({
+          context: { client },
+          videoId,
+        }),
+      });
+      if (!res.ok) continue;
+
+      const data = (await res.json()) as Record<string, unknown>;
+      const videoDetails = data.videoDetails as Record<string, unknown> | undefined;
+      const shortDescription =
+        typeof videoDetails?.shortDescription === "string" ? videoDetails.shortDescription : "";
+      const microformat = data.microformat as Record<string, unknown> | undefined;
+      const playerMicroformat = microformat?.playerMicroformatRenderer as
+        | Record<string, unknown>
+        | undefined;
+      const publishDate =
+        typeof playerMicroformat?.publishDate === "string" ? playerMicroformat.publishDate : null;
+
+      if (shortDescription.trim()) {
+        return {
+          description: shortDescription,
+          publishedAt: publishDate ? normalizePublishedAt(publishDate) : null,
+        };
+      }
+    } catch {
+      /* try next client */
+    }
+  }
+
+  return { description: "", publishedAt: null };
+}
+
 async function fetchPageDetails(
   url: string,
   platform: VideoPlatform,
@@ -128,8 +185,24 @@ async function fetchPageDetails(
 }
 
 function extractYouTubeDescription(html: string): string {
+  const parts: string[] = [];
+
   const shortDesc = html.match(/"shortDescription"\s*:\s*"((?:\\.|[^"\\])*)"/);
-  if (shortDesc?.[1]) return decodeJsonString(shortDesc[1]);
+  if (shortDesc?.[1]) parts.push(decodeJsonString(shortDesc[1]));
+
+  const attributed = html.match(/"attributedDescriptionBodyText"\s*:\s*"((?:\\.|[^"\\])*)"/);
+  if (attributed?.[1]) parts.push(decodeJsonString(attributed[1]));
+
+  const attributedSimple = html.match(
+    /"attributedDescription"\s*:\s*\{\s*"content"\s*:\s*"((?:\\.|[^"\\])*)"/,
+  );
+  if (attributedSimple?.[1]) parts.push(decodeJsonString(attributedSimple[1]));
+
+  const navUrls = extractYouTubeNavigationUrls(html);
+  if (navUrls.length) parts.push(navUrls.join("\n"));
+
+  const combined = parts.filter(Boolean).join("\n");
+  if (combined.trim()) return combined;
 
   const og = extractMetaDescription(html);
   if (og && !og.includes(" - YouTube")) return og;
@@ -138,6 +211,31 @@ function extractYouTubeDescription(html: string): string {
   if (descMatch?.[1]) return decodeJsonString(descMatch[1]);
 
   return "";
+}
+
+/** Test helper: extract navigation URLs from YouTube HTML (Shorts link cards, etc.) */
+export function extractYouTubeNavigationUrls(html: string): string[] {
+  const urls = new Set<string>();
+
+  const urlEndpointRe = /"urlEndpoint"\s*:\s*\{\s*"url"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+  for (const match of html.matchAll(urlEndpointRe)) {
+    if (match[1]) urls.add(decodeJsonString(match[1]));
+  }
+
+  const commandUrlRe = /"commandMetadata"\s*:\s*\{[^}]*"url"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+  for (const match of html.matchAll(commandUrlRe)) {
+    if (match[1]) urls.add(decodeJsonString(match[1]));
+  }
+
+  const webCommandRe = /"webCommandMetadata"\s*:\s*\{[^}]*"url"\s*:\s*"((?:\\.|[^"\\])*)"/g;
+  for (const match of html.matchAll(webCommandRe)) {
+    if (match[1]) {
+      const decoded = decodeJsonString(match[1]);
+      if (decoded.startsWith("http")) urls.add(decoded);
+    }
+  }
+
+  return [...urls];
 }
 
 function extractTikTokDescription(html: string): string {
