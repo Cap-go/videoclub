@@ -226,7 +226,7 @@ export function Home() {
               <input
                 id="videoUrl"
                 type="url"
-                placeholder="Paste YouTube, TikTok, or Instagram URL"
+                placeholder="Paste YouTube, TikTok, Instagram, or X URL"
                 value={videoUrl}
                 onChange={(e) => setVideoUrl(e.target.value)}
                 className="w-full rounded-2xl border border-[#e8e4df] bg-white py-3.5 pl-10 pr-4 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20"

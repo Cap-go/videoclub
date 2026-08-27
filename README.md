@@ -8,7 +8,7 @@ Live at [videoclub.lol](https://videoclub.lol).
 
 ## How it works
 
-1. Paste a video URL (YouTube, TikTok, Instagram).
+1. Paste a video URL (YouTube, TikTok, Instagram, or X).
 2. We read the video description for your product URL. No AI face check or founder-name gate at submit.
 3. First video for a new startup requires email.
 4. Rank = count of videos. Tie-break: earlier first video wins.

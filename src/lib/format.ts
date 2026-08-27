@@ -28,5 +28,6 @@ export function platformLabel(platform: string): string {
   if (platform === "youtube") return "YouTube";
   if (platform === "tiktok") return "TikTok";
   if (platform === "instagram") return "Instagram";
+  if (platform === "x") return "X";
   return platform;
 }

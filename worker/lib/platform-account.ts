@@ -12,11 +12,42 @@ export interface PlatformAccountInput {
   authorUrl?: string | null;
 }
 
+function extractXHandle(authorUrl?: string | null, author?: string | null): string | null {
+  const url = authorUrl?.trim();
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase().replace(/^www\./, "").replace(/^mobile\./, "");
+      if (host === "x.com" || host === "twitter.com") {
+        const segment = parsed.pathname.replace(/^\//, "").split("/")[0];
+        if (segment && segment !== "i" && segment !== "intent") {
+          return segment.toLowerCase();
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const name = author?.trim();
+  if (name) {
+    const handle = name.replace(/^@/, "").toLowerCase();
+    if (handle) return handle;
+  }
+
+  return null;
+}
+
 /** Stable identity for a video's posting account on a platform. */
 export function resolvePlatformAccount(
   platform: VideoPlatform,
   input: PlatformAccountInput,
 ): string | null {
+  if (platform === "x") {
+    const handle = extractXHandle(input.authorUrl, input.author);
+    return handle ? normalizePlatformAccount(handle) : null;
+  }
+
   const authorUrl = input.authorUrl?.trim();
   if (authorUrl) return normalizePlatformAccount(authorUrl);
 
@@ -42,7 +73,8 @@ export function resolvePlatformAccount(
 export function platformLabel(platform: VideoPlatform): string {
   if (platform === "youtube") return "YouTube";
   if (platform === "tiktok") return "TikTok";
-  return "Instagram";
+  if (platform === "instagram") return "Instagram";
+  return "X";
 }
 
 export function foreignAccountMessage(platform: VideoPlatform): string {

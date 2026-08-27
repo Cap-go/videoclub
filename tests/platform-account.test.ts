@@ -33,6 +33,15 @@ describe("platform account identity", () => {
     ).toBe("https://www.tiktok.com/@capgo");
   });
 
+  it("resolves X handle without @", () => {
+    expect(
+      resolvePlatformAccount("x", {
+        authorUrl: "https://x.com/CapgoApp",
+      }),
+    ).toBe("capgoapp");
+    expect(resolvePlatformAccount("x", { author: "@CapgoApp" })).toBe("capgoapp");
+  });
+
   it("builds foreign account message", () => {
     expect(foreignAccountMessage("youtube")).toContain("YouTube");
   });

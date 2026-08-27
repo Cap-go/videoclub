@@ -34,6 +34,13 @@ describe("embed URL builders", () => {
     expect(info.watchUrl).toBe("https://www.instagram.com/p/XYZ_9-a/");
   });
 
+  it("builds X tweet embed URLs", () => {
+    const info = buildEmbedInfo("x", "1234567890123456789", "https://x.com/founder/status/1234567890123456789");
+    expect(info.mode).toBe("iframe");
+    expect(info.embedUrl).toBe("https://platform.twitter.com/embed/Tweet.html?id=1234567890123456789&dnt=true");
+    expect(info.watchUrl).toBe("https://x.com/founder/status/1234567890123456789");
+  });
+
   it("falls back for unknown platforms", () => {
     const info = buildEmbedInfo("vimeo", "123", "https://vimeo.com/123");
     expect(info.mode).toBe("fallback");

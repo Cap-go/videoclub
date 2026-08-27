@@ -13,7 +13,7 @@ function instagramKind(videoUrl?: string): "p" | "reel" {
   return "reel";
 }
 
-/** Build privacy-enhanced YouTube, TikTok, or Instagram embed URLs for the public feed. */
+/** Build privacy-enhanced YouTube, TikTok, Instagram, or X embed URLs for the public feed. */
 export function buildEmbedInfo(
   platform: VideoPlatform | string,
   videoId: string,
@@ -43,6 +43,14 @@ export function buildEmbedInfo(
       mode: "fallback",
       embedUrl: `https://www.instagram.com/${kind}/${videoId}/embed`,
       watchUrl: videoUrl ?? `https://www.instagram.com/${kind}/${videoId}/`,
+    };
+  }
+
+  if (platform === "x" && videoId) {
+    return {
+      mode: "iframe",
+      embedUrl: `https://platform.twitter.com/embed/Tweet.html?id=${videoId}&dnt=true`,
+      watchUrl: videoUrl ?? `https://x.com/i/status/${videoId}`,
     };
   }
 

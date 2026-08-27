@@ -1,7 +1,13 @@
 import type { VideoMetadata } from "../types";
 import { resolvePlatformAccount } from "./platform-account";
 import { type ProxiedFetchBindings, proxiedFetch } from "./proxied-fetch";
-import { detectPlatform, extractPlatformVideoId, normalizeVideoUrl, type VideoPlatform } from "./urls";
+import {
+  detectPlatform,
+  extractPlatformVideoId,
+  normalizeVideoUrl,
+  SUPPORTED_PLATFORMS_MESSAGE,
+  type VideoPlatform,
+} from "./urls";
 
 const CHROME_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
@@ -14,6 +20,12 @@ const YOUTUBE_BLOCKED_MESSAGE =
 
 const YOUTUBE_EMPTY_MESSAGE =
   "We couldn't read the video description. Add a product link in the description and try again.";
+
+const X_NO_VIDEO_MESSAGE = "This tweet has no video. Only video posts on X are supported.";
+const X_EMPTY_MESSAGE =
+  "We couldn't read the tweet text. Add your product link in the tweet and try again.";
+const X_READ_FAILED_MESSAGE =
+  "We couldn't verify this X post. Make sure it is a public video tweet with your product link in the text.";
 
 export interface VideoFetchBindings extends ProxiedFetchBindings {
   YOUTUBE_API_KEY?: string;
@@ -33,7 +45,7 @@ export async function fetchVideoMetadata(
 ): Promise<VideoMetadata> {
   const platform = detectPlatform(videoUrl);
   if (!platform) {
-    throw new Error("Only YouTube, TikTok, and Instagram video URLs are supported.");
+    throw new Error(`Only ${SUPPORTED_PLATFORMS_MESSAGE} video URLs are supported.`);
   }
 
   const videoId = extractPlatformVideoId(videoUrl, platform);
@@ -42,6 +54,11 @@ export async function fetchVideoMetadata(
   }
 
   const normalizedUrl = normalizeVideoUrl(videoUrl, platform);
+
+  if (platform === "x") {
+    return fetchXVideoMetadata(videoId, normalizedUrl, bindings);
+  }
+
   const oembed = await fetchOembed(normalizedUrl, platform, bindings);
   let noembed: OembedResult = {};
   let description = oembed.description ?? "";
@@ -103,10 +120,10 @@ export async function fetchVideoMetadata(
 
 async function fetchOembed(
   url: string,
-  platform: VideoPlatform,
+  platform: Exclude<VideoPlatform, "x">,
   bindings: VideoFetchBindings,
 ): Promise<OembedResult> {
-  const endpoints: Record<VideoPlatform, string> = {
+  const endpoints: Record<Exclude<VideoPlatform, "x">, string> = {
     youtube: `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
     tiktok: `https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`,
     instagram: `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(url)}&omitscript=true`,
@@ -632,4 +649,215 @@ function normalizePublishedAt(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toISOString();
+}
+
+/** Token required by X's syndication endpoint (used by tweet embeds). */
+export function xSyndicationToken(tweetId: string): string {
+  return ((Number(tweetId) / 1e15) * Math.PI).toString(36).replace(/(0+|\.)/g, "");
+}
+
+export function tweetHasVideo(data: Record<string, unknown>): boolean {
+  const mediaDetails = data.mediaDetails as Array<Record<string, unknown>> | undefined;
+  if (mediaDetails?.some((item) => item.type === "video" || item.type === "animated_gif")) {
+    return true;
+  }
+
+  const photos = data.photos as Array<Record<string, unknown>> | undefined;
+  if (photos?.some((item) => item.type === "video" || item.type === "animated_gif")) {
+    return true;
+  }
+
+  const video = data.video as Record<string, unknown> | undefined;
+  if (video?.variants || video?.video_info || video?.poster) return true;
+
+  const entities = data.entities as Record<string, unknown> | undefined;
+  const media = entities?.media as Array<Record<string, unknown>> | undefined;
+  if (media?.some((item) => item.type === "video" || item.type === "animated_gif")) {
+    return true;
+  }
+
+  return false;
+}
+
+export function parseXSyndicationResponse(data: Record<string, unknown>): {
+  description: string;
+  title: string;
+  thumbnail: string | null;
+  author: string | null;
+  authorUrl: string | null;
+  platformAccount: string | null;
+  publishedAt: string | null;
+} {
+  const text = typeof data.text === "string" ? data.text : "";
+  const user = data.user as Record<string, unknown> | undefined;
+  const screenName = typeof user?.screen_name === "string" ? user.screen_name : null;
+  const displayName = typeof user?.name === "string" ? user.name : null;
+
+  let thumbnail: string | null = null;
+  const mediaDetails = data.mediaDetails as Array<Record<string, unknown>> | undefined;
+  for (const item of mediaDetails ?? []) {
+    if (item.type === "video" || item.type === "animated_gif") {
+      thumbnail =
+        (typeof item.media_url_https === "string" ? item.media_url_https : null) ??
+        (typeof item.url === "string" ? item.url : null);
+      if (thumbnail) break;
+    }
+  }
+
+  const createdAt = typeof data.created_at === "string" ? data.created_at : null;
+  const authorUrl = screenName ? `https://x.com/${screenName}` : null;
+
+  return {
+    description: text,
+    title: displayName ? `${displayName} on X` : "Post on X",
+    thumbnail,
+    author: screenName ? `@${screenName}` : displayName,
+    authorUrl,
+    platformAccount: resolvePlatformAccount("x", { authorUrl, author: screenName }),
+    publishedAt: createdAt ? normalizePublishedAt(createdAt) : null,
+  };
+}
+
+export function oembedHtmlHasVideo(html: string): boolean {
+  return /video\.twimg\.com|pbs\.twimg\.com\/amplify_video|media-type=["']video|data-media-type=["']video|tweet-video/i.test(
+    html,
+  );
+}
+
+export function parseXOembedHtml(html: string): { description: string; hasVideo: boolean } {
+  const hasVideo = oembedHtmlHasVideo(html);
+  const paragraphMatches = [...html.matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi)];
+  const textParts = paragraphMatches
+    .map((match) => decodeHtmlEntities(match[1]?.replace(/<[^>]+>/g, "") ?? "").trim())
+    .filter(Boolean);
+
+  return {
+    description: textParts.join("\n"),
+    hasVideo,
+  };
+}
+
+async function fetchXSyndication(
+  tweetId: string,
+  bindings: VideoFetchBindings,
+): Promise<Record<string, unknown> | null> {
+  const token = xSyndicationToken(tweetId);
+  const url = `https://cdn.syndication.twimg.com/tweet-result?id=${encodeURIComponent(tweetId)}&lang=en&token=${encodeURIComponent(token)}`;
+  const requestInit: RequestInit = {
+    headers: { Accept: "application/json", "User-Agent": CHROME_USER_AGENT },
+  };
+
+  try {
+    let { response: res, layer } = await proxiedFetch(url, bindings, { init: requestInit });
+    if (!res.ok && layer === "direct") {
+      const retry = await proxiedFetch(url, bindings, { forceProxy: true, init: requestInit });
+      res = retry.response;
+    }
+    if (!res.ok) return null;
+
+    const text = await res.text();
+    if (text.trim().startsWith("<")) return null;
+
+    const data = JSON.parse(text) as Record<string, unknown>;
+    if (!data || Object.keys(data).length === 0) return null;
+    if (typeof data.text !== "string" && typeof data.id_str !== "string") return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchXOembed(
+  tweetUrl: string,
+  bindings: VideoFetchBindings,
+): Promise<OembedResult & { hasVideo: boolean; responded: boolean }> {
+  const endpoint = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true&hide_thread=true`;
+
+  try {
+    let { response: res, layer } = await proxiedFetch(endpoint, bindings, {
+      init: { headers: { Accept: "application/json" } },
+    });
+    if (!res.ok && layer === "direct") {
+      const retry = await proxiedFetch(endpoint, bindings, {
+        forceProxy: true,
+        init: { headers: { Accept: "application/json" } },
+      });
+      res = retry.response;
+    }
+    if (!res.ok) return { hasVideo: false, responded: false };
+
+    const data = (await res.json()) as Record<string, unknown>;
+    const html = typeof data.html === "string" ? data.html : "";
+    const parsed = parseXOembedHtml(html);
+
+    return {
+      ...parseOembedJson(data),
+      description: parsed.description || undefined,
+      hasVideo: parsed.hasVideo,
+      responded: true,
+    };
+  } catch {
+    return { hasVideo: false, responded: false };
+  }
+}
+
+async function fetchXVideoMetadata(
+  videoId: string,
+  normalizedUrl: string,
+  bindings: VideoFetchBindings,
+): Promise<VideoMetadata> {
+  const syndication = await fetchXSyndication(videoId, bindings);
+
+  if (syndication) {
+    if (!tweetHasVideo(syndication)) {
+      throw new Error(X_NO_VIDEO_MESSAGE);
+    }
+
+    const parsed = parseXSyndicationResponse(syndication);
+    if (!parsed.description.trim()) {
+      throw new Error(X_EMPTY_MESSAGE);
+    }
+
+    return {
+      platform: "x",
+      videoId,
+      normalizedUrl,
+      title: parsed.title,
+      description: parsed.description,
+      thumbnail: parsed.thumbnail,
+      author: parsed.author,
+      authorUrl: parsed.authorUrl,
+      platformAccount: parsed.platformAccount,
+      publishedAt: parsed.publishedAt,
+    };
+  }
+
+  const oembed = await fetchXOembed(normalizedUrl, bindings);
+  if (oembed.hasVideo) {
+    if (!oembed.description?.trim()) {
+      throw new Error(X_EMPTY_MESSAGE);
+    }
+
+    return {
+      platform: "x",
+      videoId,
+      normalizedUrl,
+      title: oembed.title ?? "Post on X",
+      description: oembed.description ?? "",
+      thumbnail: oembed.thumbnail ?? null,
+      author: oembed.author ?? null,
+      authorUrl: oembed.authorUrl ?? null,
+      platformAccount: resolvePlatformAccount("x", {
+        author: oembed.author ?? null,
+        authorUrl: oembed.authorUrl ?? null,
+      }),
+      publishedAt: null,
+    };
+  }
+
+  if (oembed.responded) {
+    throw new Error(X_NO_VIDEO_MESSAGE);
+  }
+
+  throw new Error(X_READ_FAILED_MESSAGE);
 }
