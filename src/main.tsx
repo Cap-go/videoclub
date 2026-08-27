@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { About } from "./pages/About";
 import { DevEmails } from "./pages/DevEmails";
+import { Feed } from "./pages/Feed";
 import { Home } from "./pages/Home";
 import { Rules } from "./pages/Rules";
 import "./index.css";
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")!).render(
       <Routes>
         <Route element={<Layout />}>
           <Route index element={<Home />} />
+          <Route path="feed" element={<Feed />} />
           <Route path="rules" element={<Rules />} />
           <Route path="about" element={<About />} />
           <Route path="dev/emails" element={<DevEmails />} />

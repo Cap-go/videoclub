@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   getChallengeCount,
+  getFeedVideos,
   getLeaderboard,
   getStartupByHostIncludingRemoved,
   getStartupById,
@@ -49,6 +50,45 @@ api.get("/leaderboard", async (c) => {
   const period = parsePeriod(c.req.query("period"));
   const entries = await getLeaderboard(c.env.DB, period);
   return c.json({ period, entries });
+});
+
+api.get("/feed", async (c) => {
+  const limitRaw = Number(c.req.query("limit"));
+  const pageLimit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 50) : 30;
+  const cursorRaw = c.req.query("cursor") ?? c.req.query("before");
+  const cursor = cursorRaw ? Number(cursorRaw) : undefined;
+
+  const videos = await getFeedVideos(c.env.DB, {
+    limit: pageLimit,
+    cursor: cursor && Number.isFinite(cursor) ? cursor : undefined,
+  });
+
+  const nextCursor =
+    videos.length === pageLimit && videos.length > 0 ? String(videos[videos.length - 1]!.id) : null;
+
+  return c.json({
+    videos: videos.map((v) => ({
+      id: v.id,
+      platform: v.platform,
+      video_id: v.video_id,
+      video_url: v.video_url,
+      title: v.title,
+      thumbnail: v.thumbnail,
+      author: v.author,
+      published_at: v.published_at,
+      created_at: v.created_at,
+      submitted_at: v.created_at,
+      product_url: v.product_url,
+      startup: {
+        id: v.startup_id,
+        name: v.startup_name,
+        product_host: v.startup_host,
+        rank: v.startup_rank,
+      },
+      challenge_count: v.challenge_count,
+    })),
+    nextCursor,
+  });
 });
 
 api.get("/dev/email-previews", (c) => {
