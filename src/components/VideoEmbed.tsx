@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { buildEmbedInfo, youtubeEmbedUrl, youtubePosterUrl } from "../../worker/lib/embed";
+import {
+  buildEmbedInfo,
+  X_EMBED_SHELL_CLASS,
+  X_EMBED_POSTER_SHELL_CLASS,
+  X_EMBED_IFRAME_CLASS,
+  youtubeEmbedUrl,
+  youtubePosterUrl,
+} from "../../worker/lib/embed";
 
 interface VideoEmbedProps {
   platform: string;
@@ -94,6 +101,74 @@ function YouTubeClickToPlay({
   );
 }
 
+function XClickToPlay({
+  embedUrl,
+  title,
+  thumbnail,
+  watchUrl,
+  eager,
+}: {
+  embedUrl: string;
+  title: string;
+  thumbnail: string | null;
+  watchUrl: string;
+  eager?: boolean;
+}) {
+  const [playing, setPlaying] = useState(!thumbnail);
+
+  if (!playing && thumbnail) {
+    return (
+      <div className={`group relative aspect-[9/16] max-h-[640px] ${X_EMBED_POSTER_SHELL_CLASS}`}>
+        <img
+          src={thumbnail}
+          alt=""
+          className="h-full w-full object-cover"
+          loading={eager ? "eager" : "lazy"}
+        />
+        <button
+          type="button"
+          onClick={() => setPlaying(true)}
+          aria-label={`Play ${title}`}
+          className="absolute inset-0 flex items-center justify-center bg-black/30 transition hover:bg-black/40"
+        >
+          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[#f4623a] pl-1 text-2xl text-white shadow-lg transition group-hover:scale-105">
+            ▶
+          </span>
+        </button>
+        <a
+          href={watchUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="absolute bottom-2 right-2 rounded-md bg-black/60 px-2 py-1 text-xs text-white/80 transition hover:text-white"
+        >
+          Watch on X
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`group ${X_EMBED_SHELL_CLASS}`}>
+      <iframe
+        src={embedUrl}
+        title={title}
+        loading={eager ? "eager" : "lazy"}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        className={X_EMBED_IFRAME_CLASS}
+      />
+      <a
+        href={watchUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="block px-3 py-2 text-right text-xs text-[#6b7280] transition hover:text-[#111] group-hover:underline"
+      >
+        Watch on X
+      </a>
+    </div>
+  );
+}
+
 export function VideoEmbed({ platform, videoId, title, thumbnail, videoUrl, eager = false }: VideoEmbedProps) {
   const embed = buildEmbedInfo(platform, videoId ?? "", videoUrl);
 
@@ -101,6 +176,18 @@ export function VideoEmbed({ platform, videoId, title, thumbnail, videoUrl, eage
     return (
       <YouTubeClickToPlay
         videoId={videoId}
+        title={title}
+        thumbnail={thumbnail}
+        watchUrl={embed.watchUrl}
+        eager={eager}
+      />
+    );
+  }
+
+  if (platform === "x" && embed.mode === "iframe" && embed.embedUrl) {
+    return (
+      <XClickToPlay
+        embedUrl={embed.embedUrl}
         title={title}
         thumbnail={thumbnail}
         watchUrl={embed.watchUrl}
