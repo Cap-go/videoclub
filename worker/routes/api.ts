@@ -31,6 +31,7 @@ import { getBigTechRejection } from "../lib/submit-validation";
 import {
   DUPLICATE_VIDEO_MESSAGE,
   extractProductUrl,
+  extractProductUrls,
   hashIp,
   hostToName,
   isValidEmail,
@@ -39,7 +40,55 @@ import {
 } from "../lib/urls";
 import { fetchStartupLogo } from "../lib/logo";
 import { fetchVideoMetadata } from "../lib/video";
-import type { BoardPeriod, Env } from "../types";
+import type { BoardPeriod, Env, VideoMetadata } from "../types";
+
+export type ProductCandidate = {
+  host: string;
+  product_url: string;
+  isNew: boolean;
+};
+
+function gatherProductUrls(metadata: VideoMetadata): string[] {
+  const urls = extractProductUrls(metadata.description);
+  if (!metadata.productUrl) return urls;
+
+  const host = normalizeProductHost(metadata.productUrl);
+  const normalized = normalizeProductUrl(metadata.productUrl);
+  if (!host || !normalized) return urls;
+  if (urls.some((url) => normalizeProductHost(url) === host)) return urls;
+  return [normalized, ...urls];
+}
+
+async function resolveProductCandidates(
+  db: D1Database,
+  metadata: VideoMetadata,
+): Promise<{ candidates: ProductCandidate[]; onlyRemoved: boolean }> {
+  const candidates: ProductCandidate[] = [];
+  const seenHosts = new Set<string>();
+  let hadRemoved = false;
+  let hadAnyValidUrl = false;
+
+  for (const url of gatherProductUrls(metadata)) {
+    const host = normalizeProductHost(url);
+    if (!host || seenHosts.has(host)) continue;
+    seenHosts.add(host);
+    hadAnyValidUrl = true;
+
+    const existing = await getStartupByHostIncludingRemoved(db, host);
+    if (existing?.removed_at) {
+      hadRemoved = true;
+      continue;
+    }
+
+    candidates.push({
+      host,
+      product_url: normalizeProductUrl(url) ?? url,
+      isNew: !existing,
+    });
+  }
+
+  return { candidates, onlyRemoved: hadAnyValidUrl && candidates.length === 0 && hadRemoved };
+}
 
 export const api = new Hono<{ Bindings: Env }>();
 
@@ -194,10 +243,10 @@ api.post("/check", async (c) => {
       });
     }
 
-    const productUrl = metadata.productUrl ?? extractProductUrl(metadata.description);
+    const { candidates, onlyRemoved } = await resolveProductCandidates(c.env.DB, metadata);
 
     const bigTechRejection = getBigTechRejection({
-      productUrl,
+      productUrl: candidates[0]?.product_url ?? metadata.productUrl ?? extractProductUrl(metadata.description),
       description: metadata.description,
       platform: metadata.platform,
       platformAccount: metadata.platformAccount,
@@ -206,7 +255,11 @@ api.post("/check", async (c) => {
       return c.json({ emailRequired: false, productFound: false, error: bigTechRejection });
     }
 
-    if (!productUrl) {
+    if (onlyRemoved) {
+      return c.json({ emailRequired: false, productFound: false, error: REMOVED_HOST_MESSAGE });
+    }
+
+    if (candidates.length === 0) {
       return c.json({
         emailRequired: false,
         productFound: false,
@@ -215,24 +268,16 @@ api.post("/check", async (c) => {
       });
     }
 
-    const productHost = normalizeProductHost(productUrl);
-    if (!productHost) {
-      return c.json({ emailRequired: false, productFound: false, error: "Invalid product URL in description." });
-    }
-
-    const existing = await getStartupByHostIncludingRemoved(c.env.DB, productHost);
-    if (existing?.removed_at) {
-      return c.json({ emailRequired: false, productFound: false, error: REMOVED_HOST_MESSAGE });
-    }
-
-    const emailRequired = !existing;
+    const defaultCandidate = candidates[0]!;
+    const emailRequired = defaultCandidate.isNew;
 
     return c.json({
       emailRequired,
       productFound: true,
-      productUrl,
-      productHost,
-      startupName: hostToName(productHost),
+      candidates,
+      productUrl: defaultCandidate.product_url,
+      productHost: defaultCandidate.host,
+      startupName: hostToName(defaultCandidate.host),
       publishedAt: metadata.publishedAt,
     });
   } catch (err) {
@@ -252,12 +297,13 @@ api.post("/submit", async (c) => {
   }
 
   const body = await c.req
-    .json<{ videoUrl?: string; email?: string; force?: boolean }>()
-    .catch(() => ({ videoUrl: undefined, email: undefined, force: undefined }));
+    .json<{ videoUrl?: string; email?: string; force?: boolean; productHost?: string }>()
+    .catch(() => ({ videoUrl: undefined, email: undefined, force: undefined, productHost: undefined }));
 
   const videoUrl = body.videoUrl?.trim();
   const email = body.email?.trim().toLowerCase();
   const force = body.force === true;
+  const requestedHost = body.productHost?.trim().toLowerCase();
 
   if (!videoUrl) return c.json({ error: "Video URL is required" }, 400);
 
@@ -274,10 +320,10 @@ api.post("/submit", async (c) => {
     return c.json({ error: DUPLICATE_VIDEO_MESSAGE }, 409);
   }
 
-  const productUrlFound = metadata.productUrl ?? extractProductUrl(metadata.description);
+  const { candidates, onlyRemoved } = await resolveProductCandidates(c.env.DB, metadata);
 
   const bigTechRejection = getBigTechRejection({
-    productUrl: productUrlFound,
+    productUrl: candidates[0]?.product_url ?? metadata.productUrl ?? extractProductUrl(metadata.description),
     description: metadata.description,
     platform: metadata.platform,
     platformAccount: metadata.platformAccount,
@@ -287,7 +333,11 @@ api.post("/submit", async (c) => {
     return c.json({ error: bigTechRejection }, 403);
   }
 
-  if (!productUrlFound) {
+  if (onlyRemoved) {
+    return c.json({ error: REMOVED_HOST_MESSAGE }, 403);
+  }
+
+  if (candidates.length === 0) {
     return c.json(
       {
         error:
@@ -297,19 +347,27 @@ api.post("/submit", async (c) => {
     );
   }
 
-  const productHost = normalizeProductHost(productUrlFound);
-  if (!productHost) {
-    return c.json({ error: "Invalid product URL in description." }, 400);
+  const chosen = requestedHost
+    ? candidates.find((candidate) => candidate.host === requestedHost)
+    : candidates[0];
+
+  if (requestedHost && !chosen) {
+    return c.json({ error: "That product domain is not in this video's description." }, 400);
   }
 
-  const normalizedProductUrl = normalizeProductUrl(productUrlFound) ?? productUrlFound;
+  if (!chosen) {
+    return c.json({ error: "No product link in the video description." }, 400);
+  }
+
+  const productHost = chosen.host;
+  const normalizedProductUrl = chosen.product_url;
   const startup = await getStartupByHostIncludingRemoved(c.env.DB, productHost);
 
   if (startup?.removed_at) {
     return c.json({ error: REMOVED_HOST_MESSAGE }, 403);
   }
 
-  const isNewStartup = !startup;
+  const isNewStartup = chosen.isNew;
 
   if (isNewStartup) {
     if (!email || !isValidEmail(email)) {

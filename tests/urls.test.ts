@@ -9,6 +9,7 @@ import {
   detectPlatform,
   extractPlatformVideoId,
   extractProductUrl,
+  extractProductUrls,
   findRejectedBigTechProductUrl,
   hostToName,
   isValidEmail,
@@ -84,6 +85,25 @@ describe("URL parsing", () => {
   it("extracts first non-platform product URL from description", () => {
     const desc = "Built with AI? No. Check https://capgo.app and also https://youtube.com/watch?v=1";
     expect(extractProductUrl(desc)).toBe("https://capgo.app");
+  });
+
+  it("extracts all valid product hosts in description order", () => {
+    const desc =
+      "Ship at https://capgo.app and also https://myapp.io — ignore https://youtube.com/watch?v=1";
+    expect(extractProductUrls(desc)).toEqual(["https://capgo.app", "https://myapp.io"]);
+  });
+
+  it("dedupes product hosts while preserving first occurrence order", () => {
+    const desc = "https://capgo.app/docs and later https://www.capgo.app/pricing";
+    expect(extractProductUrls(desc)).toEqual(["https://capgo.app"]);
+  });
+
+  it("never returns blocked hosts as product candidates", () => {
+    const desc =
+      "watch https://youtube.com/watch?v=1 and https://google.com and https://capgo.app";
+    expect(extractProductUrls(desc)).toEqual(["https://capgo.app"]);
+    expect(extractProductUrls("visit https://youtube.com/watch?v=1")).toEqual([]);
+    expect(extractProductUrls("only https://accounts.google.com/login")).toEqual([]);
   });
 
   it("extracts bare domain without scheme as https", () => {

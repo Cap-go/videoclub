@@ -116,23 +116,37 @@ function tryNormalizeProductUrl(candidate: string): string | null {
   return normalizeProductUrl(cleaned);
 }
 
-export function extractProductUrl(description: string): string | null {
-  if (!description) return null;
+/** All valid product URLs in description order, deduped by normalized host. */
+export function extractProductUrls(description: string): string[] {
+  if (!description) return [];
 
-  const explicitMatches = description.match(URL_REGEX) ?? [];
-  for (const match of explicitMatches) {
-    const normalized = tryNormalizeProductUrl(match);
-    if (normalized) return normalized;
+  const seenHosts = new Set<string>();
+  const urls: string[] = [];
+
+  const addCandidate = (raw: string) => {
+    const normalized = tryNormalizeProductUrl(raw);
+    if (!normalized) return;
+    const host = normalizeProductHost(normalized);
+    if (!host || seenHosts.has(host)) return;
+    seenHosts.add(host);
+    urls.push(normalized);
+  };
+
+  for (const match of description.match(URL_REGEX) ?? []) {
+    addCandidate(match);
   }
 
   for (const match of description.matchAll(BARE_DOMAIN_REGEX)) {
     const domain = match[1];
     if (!domain || domain.includes("@")) continue;
-    const normalized = tryNormalizeProductUrl(domain);
-    if (normalized) return normalized;
+    addCandidate(domain);
   }
 
-  return null;
+  return urls;
+}
+
+export function extractProductUrl(description: string): string | null {
+  return extractProductUrls(description)[0] ?? null;
 }
 
 /** First Google / Big Tech product URL in text, including hosts blocked from extraction. */

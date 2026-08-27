@@ -8,6 +8,7 @@ import {
   getPrefilledEmail,
   isValidEmail,
   NewStartupEmailModal,
+  type ProductCandidate,
 } from "../components/NewStartupEmailModal";
 import {
   challengeVideo,
@@ -38,6 +39,9 @@ export function Home() {
   const [emailModalDraft, setEmailModalDraft] = useState(() => getPrefilledEmail());
   const [productFound, setProductFound] = useState(false);
   const [emailRequired, setEmailRequired] = useState(false);
+  const [productCandidates, setProductCandidates] = useState<ProductCandidate[]>([]);
+  const [selectedProductHost, setSelectedProductHost] = useState("");
+  const [hostConfirmed, setHostConfirmed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -48,18 +52,43 @@ export function Home() {
   const resetCheckState = useCallback(() => {
     setProductFound(false);
     setEmailRequired(false);
+    setProductCandidates([]);
+    setSelectedProductHost("");
+    setHostConfirmed(false);
     setProductPreview(null);
     setFormError(null);
     setForeignAccountWarning(null);
     setEmailModalOpen(false);
   }, []);
 
+  const selectedCandidate = useMemo(
+    () => productCandidates.find((candidate) => candidate.host === selectedProductHost),
+    [productCandidates, selectedProductHost],
+  );
+
+  const needsHostPicker = productCandidates.length > 1;
+  const needsModal =
+    productFound &&
+    (needsHostPicker || (selectedCandidate?.isNew ?? emailRequired)) &&
+    (!hostConfirmed || (emailRequired && !isValidEmail(email)));
+
   const canPost = useMemo(() => {
     const url = videoUrl.trim();
-    if (!url || checking || submitting || !productFound) return false;
+    if (!url || checking || submitting || !productFound || !selectedProductHost) return false;
+    if (needsHostPicker && !hostConfirmed) return false;
     if (emailRequired && !isValidEmail(email)) return false;
     return true;
-  }, [videoUrl, checking, submitting, productFound, emailRequired, email]);
+  }, [
+    videoUrl,
+    checking,
+    submitting,
+    productFound,
+    selectedProductHost,
+    needsHostPicker,
+    hostConfirmed,
+    emailRequired,
+    email,
+  ]);
 
   const loadBoard = useCallback(async () => {
     setLoading(true);
@@ -82,11 +111,21 @@ export function Home() {
     setEmailModalOpen(true);
   }, [email]);
 
-  const saveEmailFromModal = useCallback((savedEmail: string) => {
-    setEmail(savedEmail);
-    setEmailModalDraft(savedEmail);
-    setEmailModalOpen(false);
-  }, []);
+  const saveEmailFromModal = useCallback(
+    (payload: { host: string; email?: string }) => {
+      setSelectedProductHost(payload.host);
+      const candidate = productCandidates.find((item) => item.host === payload.host);
+      setEmailRequired(candidate?.isNew ?? false);
+      if (payload.email) {
+        setEmail(payload.email);
+        setEmailModalDraft(payload.email);
+      }
+      setHostConfirmed(true);
+      setProductPreview(candidate?.product_url ?? null);
+      setEmailModalOpen(false);
+    },
+    [productCandidates],
+  );
 
   useEffect(() => {
     const url = videoUrl.trim();
@@ -98,6 +137,9 @@ export function Home() {
 
     setProductFound(false);
     setEmailRequired(false);
+    setProductCandidates([]);
+    setSelectedProductHost("");
+    setHostConfirmed(false);
     setProductPreview(null);
     setFormError(null);
     setForeignAccountWarning(null);
@@ -112,17 +154,30 @@ export function Home() {
             setFormError(result.error ?? "No product link found in the video description.");
             setProductFound(false);
             setEmailRequired(false);
+            setProductCandidates([]);
+            setSelectedProductHost("");
+            setHostConfirmed(false);
             setProductPreview(null);
             return;
           }
+          const candidates = result.candidates ?? [];
+          const defaultHost = result.productHost ?? candidates[0]?.host ?? "";
+          const defaultCandidate =
+            candidates.find((candidate) => candidate.host === defaultHost) ?? candidates[0];
           setFormError(null);
           setProductFound(true);
-          setEmailRequired(result.emailRequired);
-          setProductPreview(result.productUrl ?? null);
+          setProductCandidates(candidates);
+          setSelectedProductHost(defaultHost);
+          setHostConfirmed(candidates.length === 1 && !defaultCandidate?.isNew);
+          setEmailRequired(defaultCandidate?.isNew ?? result.emailRequired);
+          setProductPreview(defaultCandidate?.product_url ?? result.productUrl ?? null);
         } catch (err) {
           setFormError(err instanceof Error ? err.message : "Check failed");
           setProductFound(false);
           setEmailRequired(false);
+          setProductCandidates([]);
+          setSelectedProductHost("");
+          setHostConfirmed(false);
           setProductPreview(null);
         } finally {
           setChecking(false);
@@ -134,11 +189,20 @@ export function Home() {
   }, [videoUrl, resetCheckState]);
 
   useEffect(() => {
-    if (emailRequired && productFound && !checking && !isValidEmail(email)) {
-      setEmailModalDraft(email || getPrefilledEmail());
-      setEmailModalOpen(true);
-    }
-  }, [emailRequired, productFound, checking, email]);
+    if (!needsModal || checking) return;
+    setEmailModalDraft(email || getPrefilledEmail());
+    setEmailModalOpen(true);
+  }, [needsModal, checking, email]);
+
+  const handleSelectedHostChange = useCallback(
+    (host: string) => {
+      setSelectedProductHost(host);
+      const candidate = productCandidates.find((item) => item.host === host);
+      setEmailRequired(candidate?.isNew ?? false);
+      setProductPreview(candidate?.product_url ?? null);
+    },
+    [productCandidates],
+  );
 
   const totalVideos = useMemo(
     () => entries.reduce((sum, entry) => sum + entry.video_count, 0),
@@ -173,7 +237,10 @@ export function Home() {
     if (!force) setForeignAccountWarning(null);
     setSubmitting(true);
     try {
-      const result = await submitVideo(videoUrl.trim(), email.trim() || undefined, { force });
+      const result = await submitVideo(videoUrl.trim(), email.trim() || undefined, {
+        force,
+        productHost: selectedProductHost,
+      });
       setFormSuccess(
         `Posted "${result.video.title}" — ${result.startup.name} is now #${result.startup.rank}`,
       );
@@ -233,6 +300,9 @@ export function Home() {
       <HowItWorksModal open={howItWorksOpen} onClose={() => setHowItWorksOpen(false)} />
       <NewStartupEmailModal
         open={emailModalOpen}
+        candidates={productCandidates}
+        selectedHost={selectedProductHost}
+        onSelectedHostChange={handleSelectedHostChange}
         email={emailModalDraft}
         onEmailChange={setEmailModalDraft}
         onSave={saveEmailFromModal}
@@ -289,16 +359,16 @@ export function Home() {
             </button>
           </div>
 
-          {productPreview && (
+          {productPreview && selectedProductHost && (
             <p className="text-center text-sm text-[#6b7280]">
-              Product in description:{" "}
+              Product for this post:{" "}
               <a
                 href={productPreview}
                 className="font-medium text-[#f4623a] hover:underline"
                 target="_blank"
                 rel="noreferrer"
               >
-                {productPreview}
+                {selectedProductHost}
               </a>
             </p>
           )}
