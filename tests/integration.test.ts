@@ -136,21 +136,31 @@ describe("community challenges", () => {
     expect(body.error).toContain("Invalid");
   });
 
-  it("emails founder on first challenge and on removal", async () => {
+  it("emails founder on first and second challenge and on removal", async () => {
     const sendMock = env.EMAIL!.send as ReturnType<typeof vi.fn>;
 
     await postChallenge(1, "11.11.11.11", "ai");
-    expect(sendMock.mock.calls.some((c) => (c[0] as { subject?: string }).subject?.includes("challenged"))).toBe(
+    expect(sendMock.mock.calls.some((c) => (c[0] as { subject?: string }).subject?.includes("1/3"))).toBe(
       true,
     );
 
     sendMock.mockClear();
     await postChallenge(1, "12.12.12.12", "not_founder");
+    expect(sendMock.mock.calls.some((c) => (c[0] as { subject?: string }).subject?.includes("2/3"))).toBe(
+      true,
+    );
+
+    sendMock.mockClear();
     await postChallenge(1, "13.13.13.13", "not_real_product");
 
     expect(sendMock.mock.calls.some((c) => (c[0] as { subject?: string }).subject?.includes("Removed"))).toBe(
       true,
     );
+    const removedText = (sendMock.mock.calls.find((c) =>
+      (c[0] as { subject?: string }).subject?.includes("Removed"),
+    )?.[0] as { text?: string })?.text;
+    expect(removedText).toContain("off the board");
+    expect(removedText).toContain("cannot be re-listed");
   });
 });
 
@@ -507,7 +517,8 @@ describe("email previews", () => {
       "welcome",
       "rank-outranked",
       "rank-climbed",
-      "challenged",
+      "challenged-1",
+      "challenged-2",
       "removed",
     ]);
   });

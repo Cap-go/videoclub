@@ -532,7 +532,7 @@ api.post("/challenge/:videoId", async (c) => {
         }
       })(),
     );
-  } else if (challengeCount === 1) {
+  } else if (challengeCount === 1 || challengeCount === 2) {
     c.executionCtx.waitUntil(
       sendEmail(c.env, {
         kind: "challenged",

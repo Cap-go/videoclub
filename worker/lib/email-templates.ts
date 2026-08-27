@@ -36,32 +36,127 @@ export function emailShell(title: string, body: string, boardUrl: string): strin
 </body></html>`;
 }
 
-export function buildEmailContent(payload: EmailPayload, appUrl: string) {
-  const boardUrl = appUrl;
+function welcomeEmailBody(payload: EmailPayload, boardUrl: string) {
+  const rank = payload.rank ?? "?";
+  const subject = "Thanks for joining Video Club";
+  const text = [
+    `Thanks for registering and posting your first video, ${payload.startupName}.`,
+    ``,
+    `You're on the board at rank #${rank}.`,
+    ``,
+    `What we'll email you:`,
+    `- If another maker outranks you`,
+    `- If someone challenges one of your videos`,
+    `- If a video is removed or your whole listing comes off the board`,
+    ``,
+    `Keep posting real founder videos with your product link in the description.`,
+    ``,
+    boardUrl,
+  ].join("\n");
+  const html = emailShell(
+    subject,
+    `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Thanks for registering and posting your first video, <strong>${escapeHtml(payload.startupName)}</strong>.</p>
+       <p style="font-size:32px;font-weight:700;margin:0 0 8px;color:${ACCENT};">#${rank}</p>
+       <p style="font-size:14px;color:${MUTED};margin:0 0 20px;">Your spot on the All-time board</p>
+       <p style="font-size:15px;line-height:1.6;margin:0 0 8px;font-weight:600;">What we'll email you:</p>
+       <ul style="font-size:15px;line-height:1.6;margin:0 0 20px;padding-left:20px;color:${TEXT};">
+         <li>If another maker outranks you</li>
+         <li>If someone challenges one of your videos</li>
+         <li>If a video is removed or your whole listing comes off the board</li>
+       </ul>
+       <p style="font-size:15px;line-height:1.6;margin:0;">Keep posting real founder videos with your product link in the description.</p>`,
+    boardUrl,
+  );
+  return { subject, text, html };
+}
 
-  if (payload.kind === "welcome") {
-    const rank = payload.rank ?? "?";
-    const subject = "Thanks for joining Video Club";
+function challengedEmailBody(payload: EmailPayload, boardUrl: string) {
+  const reason = payload.challengeReason ?? "invalid";
+  const count = payload.challengeCount ?? 1;
+  const videoLine = `${payload.videoTitle ?? "Unknown"} — ${payload.videoUrl ?? ""}`;
+
+  if (count >= 2) {
+    const subject = "Your Video Club video was challenged (2/3)";
     const text = [
-      `Thanks for registering and posting your first video, ${payload.startupName}.`,
+      `One more distinct challenge and both this video and your listing are removed from Video Club.`,
       ``,
-      `You're on the board at rank #${rank}.`,
-      `We'll email you when another maker outranks you.`,
+      `This video is now at 2/3.`,
       ``,
-      `Keep posting real founder videos with your product link in the description.`,
+      `Latest reason: ${reason}`,
+      `Video: ${videoLine}`,
       ``,
       boardUrl,
     ].join("\n");
     const html = emailShell(
       subject,
-      `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Thanks for registering and posting your first video, <strong>${escapeHtml(payload.startupName)}</strong>.</p>
-       <p style="font-size:32px;font-weight:700;margin:0 0 8px;color:${ACCENT};">#${rank}</p>
-       <p style="font-size:14px;color:${MUTED};margin:0 0 20px;">Your spot on the All-time board</p>
-       <p style="font-size:15px;line-height:1.6;margin:0;">We'll email you when another maker outranks you.</p>
-       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Keep posting real founder videos with your product link in the description.</p>`,
+      `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">One more distinct challenge and both this video <strong>and your listing</strong> are removed from Video Club.</p>
+       <p style="font-size:15px;line-height:1.6;margin:0;">This video is now at <strong style="color:${ACCENT};">2/3</strong>.</p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;"><strong>Latest reason:</strong> ${escapeHtml(reason)}</p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
+       <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>`,
       boardUrl,
     );
     return { subject, text, html };
+  }
+
+  const subject = "Your Video Club video was challenged (1/3)";
+  const text = [
+    `Someone challenged a video for ${payload.startupName}.`,
+    `Reason: ${reason}`,
+    `Video: ${videoLine}`,
+    ``,
+    `Challenges are public. Three distinct challenges remove this video and your listing from the board.`,
+    `This video is now at 1/3.`,
+    ``,
+    boardUrl,
+  ].join("\n");
+  const html = emailShell(
+    subject,
+    `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Someone challenged a video for <strong>${escapeHtml(payload.startupName)}</strong>.</p>
+       <p style="font-size:15px;line-height:1.6;margin:0;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>
+       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
+       <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>
+       <p style="font-size:14px;color:${MUTED};margin:16px 0 0;">Challenges are public. Three distinct challenges remove this video <strong>and your listing</strong>. This video is now at <strong>1/3</strong>.</p>`,
+    boardUrl,
+  );
+  return { subject, text, html };
+}
+
+function removedEmailBody(payload: EmailPayload, boardUrl: string) {
+  const subject = "Removed from Video Club";
+  const text = [
+    `Three community challenges were recorded against a video for ${payload.startupName}.`,
+    ``,
+    `What happened:`,
+    `- The challenged video has been removed`,
+    `- ${payload.startupName} is off the board`,
+    `- This product host cannot be re-listed`,
+    ``,
+    `Challenged video: ${payload.videoTitle ?? "Unknown"} — ${payload.videoUrl ?? ""}`,
+    ``,
+    boardUrl,
+  ].join("\n");
+  const html = emailShell(
+    subject,
+    `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Three community challenges were recorded against a video for <strong>${escapeHtml(payload.startupName)}</strong>.</p>
+     <p style="font-size:15px;line-height:1.6;margin:0 0 8px;font-weight:600;">What happened:</p>
+     <ul style="font-size:15px;line-height:1.6;margin:0 0 20px;padding-left:20px;">
+       <li>The challenged video has been removed</li>
+       <li><strong>${escapeHtml(payload.startupName)}</strong> is off the board</li>
+       <li>This product host cannot be re-listed</li>
+     </ul>
+     <p style="font-size:15px;line-height:1.6;margin:0;">Challenged video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
+     <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>`,
+    boardUrl,
+  );
+  return { subject, text, html };
+}
+
+export function buildEmailContent(payload: EmailPayload, appUrl: string) {
+  const boardUrl = appUrl;
+
+  if (payload.kind === "welcome") {
+    return welcomeEmailBody(payload, boardUrl);
   }
 
   if (payload.kind === "rank_changed") {
@@ -106,28 +201,7 @@ export function buildEmailContent(payload: EmailPayload, appUrl: string) {
   }
 
   if (payload.kind === "challenged") {
-    const reason = payload.challengeReason ?? "invalid";
-    const count = payload.challengeCount ?? 1;
-    const subject = "Your Video Club video was challenged";
-    const text = [
-      `Someone challenged a video for ${payload.startupName}.`,
-      `Reason: ${reason}`,
-      `Video: ${payload.videoTitle ?? "Unknown"} — ${payload.videoUrl ?? ""}`,
-      ``,
-      `Challenges are public. Three distinct challenges remove the video and your startup from the board.`,
-      `Current challenges on this video: ${count}/3`,
-      boardUrl,
-    ].join("\n");
-    const html = emailShell(
-      subject,
-      `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;">Someone challenged a video for <strong>${escapeHtml(payload.startupName)}</strong>.</p>
-       <p style="font-size:15px;line-height:1.6;margin:0;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>
-       <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
-       <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>
-       <p style="font-size:14px;color:${MUTED};margin:16px 0 0;">Challenges are public. Three distinct challenges remove the video and your startup. Currently <strong>${count}/3</strong>.</p>`,
-      boardUrl,
-    );
-    return { subject, text, html };
+    return challengedEmailBody(payload, boardUrl);
   }
 
   if (payload.kind === "foreign_account_review") {
@@ -162,23 +236,7 @@ export function buildEmailContent(payload: EmailPayload, appUrl: string) {
     return { subject, text, html };
   }
 
-  const reason = payload.removalReason ?? "Removed after community challenges";
-  const subject = "Removed from Video Club";
-  const text = [
-    `${payload.startupName} was removed from Video Club.`,
-    `Reason: ${reason}`,
-    `Challenged video: ${payload.videoTitle ?? "Unknown"} — ${payload.videoUrl ?? ""}`,
-    boardUrl,
-  ].join("\n");
-  const html = emailShell(
-    subject,
-    `<p style="font-size:16px;line-height:1.6;margin:0 0 16px;"><strong>${escapeHtml(payload.startupName)}</strong> was removed from Video Club.</p>
-     <p style="font-size:15px;line-height:1.6;margin:0;"><strong>Reason:</strong> ${escapeHtml(reason)}</p>
-     <p style="font-size:15px;line-height:1.6;margin:16px 0 0;">Challenged video: ${escapeHtml(payload.videoTitle ?? "Unknown")}<br/>
-     <a href="${escapeHtml(payload.videoUrl ?? "")}" style="color:${ACCENT};word-break:break-all;">${escapeHtml(payload.videoUrl ?? "")}</a></p>`,
-    boardUrl,
-  );
-  return { subject, text, html };
+  return removedEmailBody(payload, boardUrl);
 }
 
 export interface EmailPreviewFixture {
@@ -220,7 +278,7 @@ export const EMAIL_PREVIEW_FIXTURES: EmailPreviewFixture[] = [
     },
   },
   {
-    id: "challenged",
+    id: "challenged-1",
     payload: {
       kind: "challenged",
       to: "founder@capgo.app",
@@ -230,6 +288,19 @@ export const EMAIL_PREVIEW_FIXTURES: EmailPreviewFixture[] = [
       videoTitle: "Why we built Capgo — founder update",
       challengeReason: "AI video",
       challengeCount: 1,
+    },
+  },
+  {
+    id: "challenged-2",
+    payload: {
+      kind: "challenged",
+      to: "founder@capgo.app",
+      startupName: "Capgo",
+      productUrl: "https://capgo.app",
+      videoUrl: "https://www.youtube.com/watch?v=example",
+      videoTitle: "Why we built Capgo — founder update",
+      challengeReason: "Not the founder",
+      challengeCount: 2,
     },
   },
   {
