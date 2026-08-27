@@ -4,6 +4,8 @@ export interface Env {
   EMAIL?: SendEmail;
   APP_URL: string;
   EMAIL_FROM: string;
+  /** Optional fallback when InnerTube/HTML scraping is blocked by YouTube. */
+  YOUTUBE_API_KEY?: string;
 }
 
 export type BoardPeriod = "all" | "today";

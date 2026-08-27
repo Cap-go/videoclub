@@ -77,6 +77,7 @@ Deploy runs after successful CI on `main` (or via workflow dispatch):
 
 - `send_email` binding (`EMAIL`) — configured in `wrangler.jsonc`
 - Email Service domain onboarded for `videoclub.lol`
+- `YOUTUBE_API_KEY` (optional secret) — last-resort fallback via YouTube Data API v3 when InnerTube/HTML scraping is blocked. Set with `wrangler secret put YOUTUBE_API_KEY --env production`. Primary path uses InnerTube (ANDROID/IOS player clients) and does not require a key.
 
 If the `EMAIL` binding is missing or send fails, submissions still work — emails are skipped and logged.
 
