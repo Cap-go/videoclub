@@ -3,14 +3,14 @@ import { useOutletContext } from "react-router-dom";
 import { LivePill } from "../components/LivePill";
 import { RankCard } from "../components/RankCard";
 import {
+  challengeVideo,
   checkVideo,
   getLeaderboard,
   getStartupVideos,
-  reportVideo,
   submitVideo,
   type BoardPeriod,
+  type ChallengeReason,
   type LeaderboardEntry,
-  type ReportReason,
   type StartupVideo,
 } from "../lib/api";
 
@@ -24,9 +24,7 @@ export function Home() {
 
   const [videoUrl, setVideoUrl] = useState("");
   const [email, setEmail] = useState("");
-  const [founderName, setFounderName] = useState("");
   const [emailRequired, setEmailRequired] = useState(false);
-  const [founderNameRequired, setFounderNameRequired] = useState(false);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -78,7 +76,6 @@ export function Home() {
     const url = videoUrl.trim();
     if (!url) {
       setEmailRequired(false);
-      setFounderNameRequired(false);
       setProductPreview(null);
       return;
     }
@@ -89,12 +86,10 @@ export function Home() {
       if (result.error) {
         setFormError(result.error);
         setEmailRequired(false);
-        setFounderNameRequired(false);
         setProductPreview(null);
         return;
       }
       setEmailRequired(result.emailRequired);
-      setFounderNameRequired(result.founderNameRequired ?? result.emailRequired);
       setProductPreview(result.productUrl ?? null);
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Check failed");
@@ -109,52 +104,50 @@ export function Home() {
     setFormSuccess(null);
     setSubmitting(true);
     try {
-      const result = await submitVideo(
-        videoUrl.trim(),
-        email.trim() || undefined,
-        founderName.trim() || undefined,
-      );
+      const result = await submitVideo(videoUrl.trim(), email.trim() || undefined);
       setFormSuccess(
         `Posted "${result.video.title}" — ${result.startup.name} is now #${result.startup.rank}`,
       );
       setVideoUrl("");
       setEmail("");
-      setFounderName("");
       setEmailRequired(false);
-      setFounderNameRequired(false);
       setProductPreview(null);
       await loadBoard();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Submit failed";
       setFormError(message);
       if (message.includes("Email is required")) setEmailRequired(true);
-      if (message.includes("Founder name is required")) setFounderNameRequired(true);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleReport = async (videoId: number, reason: ReportReason) => {
-    const labels: Record<ReportReason, string> = {
+  const handleChallenge = async (videoId: number, reason: ChallengeReason) => {
+    const labels: Record<ChallengeReason, string> = {
       ai: "AI video",
-      not_founder: "not the founder",
-      no_product_link: "no product link",
-      other: "other issue",
+      not_founder: "Not the founder",
+      not_real_product: "Not a real product",
     };
     if (
       !confirm(
-        `Report as "${labels[reason]}"? One report removes the video and the entire startup from the board.`,
+        `Challenge as "${labels[reason]}"? Challenges are public. Three distinct challenges removes the video and startup.`,
       )
     ) {
       return;
     }
     try {
-      await reportVideo(videoId, reason);
-      setExpandedId(null);
-      setExpandedVideos([]);
+      const result = await challengeVideo(videoId, reason);
+      if (result.removed) {
+        setExpandedId(null);
+        setExpandedVideos([]);
+      } else if (expandedId) {
+        const data = await getStartupVideos(expandedId);
+        setExpandedVideos(data.videos);
+      }
       await loadBoard();
+      alert(result.message);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Report failed");
+      alert(err instanceof Error ? err.message : "Challenge failed");
     }
   };
 
@@ -201,17 +194,6 @@ export function Home() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:w-56"
             />
-            {founderNameRequired && (
-              <input
-                id="founderName"
-                type="text"
-                required
-                placeholder="Founder name (required)"
-                value={founderName}
-                onChange={(e) => setFounderName(e.target.value)}
-                className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:w-48"
-              />
-            )}
             <button
               type="submit"
               disabled={submitting || checking}
@@ -247,7 +229,7 @@ export function Home() {
             <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">How it works</p>
             <ul className="mt-3 space-y-2 text-sm text-[#6b7280]">
               <li>Paste a founder video URL</li>
-              <li>Product link must be in the description today</li>
+              <li>Product link must be in the description</li>
               <li>Old videos count on All-time — dump your back catalog</li>
               <li>Same video id never counts twice</li>
             </ul>
@@ -255,7 +237,7 @@ export function Home() {
           <div className="rounded-2xl border border-[#fcd4c4] bg-[#fff9f7] p-4">
             <p className="text-sm font-semibold text-[#111]">Rank is the videos — nothing else.</p>
             <p className="mt-2 text-sm text-[#6b7280]">
-              Real founder. Real product link. Community reports keep the board honest.
+              Legitimacy is crowd-judged. Challenge fake videos — three challenges removes a startup.
             </p>
           </div>
         </aside>
@@ -279,7 +261,7 @@ export function Home() {
             <p className="text-[#6b7280]">Loading…</p>
           ) : entries.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[#e8e4df] bg-white p-10 text-center">
-              <p className="text-lg font-semibold text-[#111]">Be the first founder on camera.</p>
+              <p className="text-lg font-semibold text-[#111]">Be the first on the board.</p>
               <p className="mt-2 text-sm text-[#6b7280]">
                 Post one video with your product link in the description. You&apos;re #1.
               </p>
@@ -294,7 +276,7 @@ export function Home() {
                   videosLoading={videosLoading}
                   videos={expandedId === entry.id ? expandedVideos : []}
                   onToggle={() => void toggleRow(entry)}
-                  onReport={(id, reason) => void handleReport(id, reason)}
+                  onChallenge={(id, reason) => void handleChallenge(id, reason)}
                 />
               ))}
             </div>

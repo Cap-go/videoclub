@@ -31,13 +31,16 @@ CREATE TABLE IF NOT EXISTS videos (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_videos_platform_video_id ON videos(platform, video_id);
 
-CREATE TABLE IF NOT EXISTS reports (
+CREATE TABLE IF NOT EXISTS challenges (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   video_id INTEGER NOT NULL REFERENCES videos(id),
-  reason TEXT NOT NULL DEFAULT 'ai',
+  reason TEXT NOT NULL,
   ip_hash TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(video_id, ip_hash)
 );
+
+CREATE INDEX IF NOT EXISTS idx_challenges_video ON challenges(video_id);
 
 CREATE TABLE IF NOT EXISTS rate_limits (
   key TEXT PRIMARY KEY,

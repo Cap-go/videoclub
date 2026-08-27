@@ -1,6 +1,6 @@
 const WINDOW_MS = 60 * 60 * 1000;
 const SUBMIT_LIMIT = 20;
-const REPORT_LIMIT = 20;
+const CHALLENGE_LIMIT = 20;
 
 export async function checkRateLimit(
   db: D1Database,
@@ -48,6 +48,6 @@ export async function rateLimitSubmit(db: D1Database, ipHash: string) {
   return checkRateLimit(db, `submit:${ipHash}`, SUBMIT_LIMIT);
 }
 
-export async function rateLimitReport(db: D1Database, ipHash: string) {
-  return checkRateLimit(db, `report:${ipHash}`, REPORT_LIMIT);
+export async function rateLimitChallenge(db: D1Database, ipHash: string) {
+  return checkRateLimit(db, `challenge:${ipHash}`, CHALLENGE_LIMIT);
 }
