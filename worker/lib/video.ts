@@ -2,10 +2,28 @@ import type { VideoMetadata } from "../types";
 import { resolvePlatformAccount } from "./platform-account";
 import { detectPlatform, extractPlatformVideoId, normalizeVideoUrl, type VideoPlatform } from "./urls";
 
-const USER_AGENT =
-  "Mozilla/5.0 (compatible; VideoClubBot/1.0; +https://videoclub.lol)";
+const CHROME_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
-export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadata> {
+const USER_AGENT = CHROME_USER_AGENT;
+
+/** Required on ANDROID/IOS player requests or YouTube returns "video unavailable". */
+const INNERTUBE_PLAYER_PARAMS = "CgIQBg==";
+
+const YOUTUBE_BLOCKED_MESSAGE =
+  "We couldn't read the video description. YouTube may be blocking requests from our servers — try again in a few minutes. Make sure your product link is in the video description.";
+
+const YOUTUBE_EMPTY_MESSAGE =
+  "We couldn't read the video description. Add a product link in the description and try again.";
+
+interface FetchVideoMetadataOptions {
+  youtubeApiKey?: string;
+}
+
+export async function fetchVideoMetadata(
+  videoUrl: string,
+  options?: FetchVideoMetadataOptions,
+): Promise<VideoMetadata> {
   const platform = detectPlatform(videoUrl);
   if (!platform) {
     throw new Error("Only YouTube, TikTok, and Instagram video URLs are supported.");
@@ -21,15 +39,25 @@ export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadat
   let noembed: OembedResult = {};
   let description = oembed.description ?? "";
   let publishedAt: string | null = null;
+  let youtubeBlocked = false;
 
   if (platform === "youtube") {
     const innertube = await fetchYouTubeInnertubeDetails(videoId);
     if (innertube.description) description = innertube.description;
     if (innertube.publishedAt) publishedAt = innertube.publishedAt;
+    youtubeBlocked = innertube.blocked;
+
     if (!description.trim()) {
-      const page = await fetchPageDetails(normalizedUrl, platform);
-      description = page.description;
+      const page = await fetchYouTubePageDetails(videoId, normalizedUrl);
+      if (page.description) description = page.description;
       publishedAt = publishedAt ?? page.publishedAt;
+      youtubeBlocked = youtubeBlocked || page.blocked;
+    }
+
+    if (!description.trim() && options?.youtubeApiKey) {
+      const api = await fetchYouTubeDataApiDetails(videoId, options.youtubeApiKey);
+      if (api.description) description = api.description;
+      publishedAt = publishedAt ?? api.publishedAt;
     }
   } else if (!description.trim()) {
     const page = await fetchPageDetails(normalizedUrl, platform);
@@ -46,9 +74,7 @@ export async function fetchVideoMetadata(videoUrl: string): Promise<VideoMetadat
   }
 
   if (!description.trim()) {
-    throw new Error(
-      "We couldn't read the video description. Add a product link in the description and try again.",
-    );
+    throw new Error(youtubeBlocked ? YOUTUBE_BLOCKED_MESSAGE : YOUTUBE_EMPTY_MESSAGE);
   }
 
   return {
@@ -125,52 +151,237 @@ async function fetchNoembed(url: string): Promise<OembedResult> {
   }
 }
 
+interface InnertubeClientConfig {
+  client: Record<string, unknown>;
+  userAgent: string;
+  params?: string;
+  thirdParty?: { embedUrl: string };
+}
+
+function innertubeClientConfigs(videoId: string): InnertubeClientConfig[] {
+  return [
+    {
+      client: {
+        clientName: "ANDROID",
+        clientVersion: "20.10.38",
+        androidSdkVersion: 33,
+        hl: "en",
+        gl: "US",
+        osName: "Android",
+        osVersion: "13",
+      },
+      userAgent: "com.google.android.youtube/20.10.38 (Linux; U; Android 13) gzip",
+      params: INNERTUBE_PLAYER_PARAMS,
+    },
+    {
+      client: {
+        clientName: "IOS",
+        clientVersion: "20.10.4",
+        deviceMake: "Apple",
+        deviceModel: "iPhone14,3",
+        hl: "en",
+        gl: "US",
+        osName: "iOS",
+        osVersion: "17.0",
+      },
+      userAgent: "com.google.ios.youtube/20.10.4 (iPhone14,3; U; CPU iOS 17_0 like Mac OS X)",
+      params: INNERTUBE_PLAYER_PARAMS,
+    },
+    {
+      client: {
+        clientName: "WEB_EMBEDDED_PLAYER",
+        clientVersion: "2.20250220.01.00",
+        hl: "en",
+        gl: "US",
+      },
+      userAgent: CHROME_USER_AGENT,
+      thirdParty: { embedUrl: `https://www.youtube.com/embed/${videoId}` },
+    },
+  ];
+}
+
+function isInnertubeBlocked(data: Record<string, unknown>): boolean {
+  const status = (data.playabilityStatus as Record<string, unknown> | undefined)?.status;
+  if (status === "LOGIN_REQUIRED") return true;
+  if (status === "ERROR") {
+    const reason = (data.playabilityStatus as Record<string, unknown> | undefined)?.reason;
+    return typeof reason === "string" && /bot|sign in|blocked/i.test(reason);
+  }
+  return false;
+}
+
+/** Test helper: build description + publish date from an InnerTube player JSON payload. */
+export function parseInnertubePlayerResponse(data: Record<string, unknown>): {
+  description: string;
+  publishedAt: string | null;
+  blocked: boolean;
+} {
+  const blocked = isInnertubeBlocked(data);
+  const videoDetails = data.videoDetails as Record<string, unknown> | undefined;
+
+  const shortDescription =
+    typeof videoDetails?.shortDescription === "string" ? videoDetails.shortDescription : "";
+
+  const microformat = data.microformat as Record<string, unknown> | undefined;
+  const playerMicroformat = microformat?.playerMicroformatRenderer as Record<string, unknown> | undefined;
+  const publishDate =
+    typeof playerMicroformat?.publishDate === "string" ? playerMicroformat.publishDate : null;
+
+  return {
+    description: shortDescription.trim(),
+    publishedAt: publishDate ? normalizePublishedAt(publishDate) : null,
+    blocked,
+  };
+}
+
 async function fetchYouTubeInnertubeDetails(
   videoId: string,
-): Promise<{ description: string; publishedAt: string | null }> {
-  const clients = [
-    { clientName: "ANDROID", clientVersion: "20.10.38" },
-    { clientName: "WEB", clientVersion: "2.20240101.00.00" },
-  ];
+): Promise<{ description: string; publishedAt: string | null; blocked: boolean }> {
+  let blocked = false;
 
-  for (const client of clients) {
+  for (const config of innertubeClientConfigs(videoId)) {
     try {
+      const body: Record<string, unknown> = {
+        context: {
+          client: config.client,
+          ...(config.thirdParty ? { thirdParty: config.thirdParty } : {}),
+        },
+        videoId,
+      };
+      if (config.params) body.params = config.params;
+
       const res = await fetch("https://www.youtube.com/youtubei/v1/player", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "User-Agent": USER_AGENT,
+          "User-Agent": config.userAgent,
+          Accept: "*/*",
+          "Accept-Language": "en-US,en;q=0.9",
         },
-        body: JSON.stringify({
-          context: { client },
-          videoId,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) continue;
 
       const data = (await res.json()) as Record<string, unknown>;
-      const videoDetails = data.videoDetails as Record<string, unknown> | undefined;
-      const shortDescription =
-        typeof videoDetails?.shortDescription === "string" ? videoDetails.shortDescription : "";
-      const microformat = data.microformat as Record<string, unknown> | undefined;
-      const playerMicroformat = microformat?.playerMicroformatRenderer as
-        | Record<string, unknown>
-        | undefined;
-      const publishDate =
-        typeof playerMicroformat?.publishDate === "string" ? playerMicroformat.publishDate : null;
+      const parsed = parseInnertubePlayerResponse(data);
+      blocked = blocked || parsed.blocked;
 
-      if (shortDescription.trim()) {
-        return {
-          description: shortDescription,
-          publishedAt: publishDate ? normalizePublishedAt(publishDate) : null,
-        };
+      if (parsed.description.trim()) {
+        return parsed;
       }
     } catch {
       /* try next client */
     }
   }
 
-  return { description: "", publishedAt: null };
+  return { description: "", publishedAt: null, blocked };
+}
+
+async function fetchYouTubeDataApiDetails(
+  videoId: string,
+  apiKey: string,
+): Promise<{ description: string; publishedAt: string | null }> {
+  try {
+    const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+    url.searchParams.set("part", "snippet");
+    url.searchParams.set("id", videoId);
+    url.searchParams.set("key", apiKey);
+
+    const res = await fetch(url.toString(), {
+      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
+    });
+    if (!res.ok) return { description: "", publishedAt: null };
+
+    const data = (await res.json()) as Record<string, unknown>;
+    const items = data.items as Array<Record<string, unknown>> | undefined;
+    const snippet = items?.[0]?.snippet as Record<string, unknown> | undefined;
+    const description = typeof snippet?.description === "string" ? snippet.description : "";
+    const publishedAt =
+      typeof snippet?.publishedAt === "string" ? normalizePublishedAt(snippet.publishedAt) : null;
+
+    return { description, publishedAt };
+  } catch {
+    return { description: "", publishedAt: null };
+  }
+}
+
+async function fetchYouTubePageDetails(
+  videoId: string,
+  watchUrl: string,
+): Promise<{ description: string; publishedAt: string | null; blocked: boolean }> {
+  const urls = [
+    watchUrl,
+    `https://www.youtube.com/shorts/${videoId}`,
+  ];
+
+  let blocked = false;
+
+  for (const url of urls) {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": CHROME_USER_AGENT,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        Cookie: "CONSENT=YES+cb.20210328-17-p0.en+FX+667",
+      },
+      redirect: "follow",
+    });
+
+    if (res.status === 429) {
+      blocked = true;
+      continue;
+    }
+    if (!res.ok) continue;
+
+    const html = await res.text();
+    if (/consent\.youtube\.com|Sign in to confirm/i.test(html)) {
+      blocked = true;
+    }
+
+    const playerResponse = extractYtInitialPlayerResponse(html);
+    if (playerResponse) {
+      const parsed = parseInnertubePlayerResponse(playerResponse);
+      blocked = blocked || parsed.blocked;
+      if (parsed.description.trim()) {
+        return parsed;
+      }
+    }
+
+    const description = parseDescriptionFromHtml(html, "youtube");
+    const publishedAt = parsePublishedAtFromHtml(html, "youtube");
+    if (description.trim()) {
+      return { description, publishedAt, blocked };
+    }
+  }
+
+  return { description: "", publishedAt: null, blocked };
+}
+
+function extractYtInitialPlayerResponse(html: string): Record<string, unknown> | null {
+  const marker = "ytInitialPlayerResponse";
+  const start = html.indexOf(marker);
+  if (start === -1) return null;
+
+  const braceStart = html.indexOf("{", start);
+  if (braceStart === -1) return null;
+
+  let depth = 0;
+  for (let i = braceStart; i < html.length; i++) {
+    const char = html[i];
+    if (char === "{") depth++;
+    else if (char === "}") {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(html.slice(braceStart, i + 1)) as Record<string, unknown>;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 async function fetchPageDetails(

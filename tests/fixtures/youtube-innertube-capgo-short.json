@@ -1,0 +1,15 @@
+{
+  "playabilityStatus": {
+    "status": "OK"
+  },
+  "videoDetails": {
+    "videoId": "-abGcOfoKHg",
+    "title": "Capgo Onboarding Setup",
+    "shortDescription": "Finished the Capgo onboarding—what should you do next? This video walks through choosing a versioning strategy.\n\n**Relevant Capgo documentation**\n\n- CLI Onboarding Guide https://capgo.app/docs/getting-started/onboarding/\n- Channels https://capgo.app/docs/live-updates/channels/\n- Versioning https://capgo.app/docs/versioning/"
+  },
+  "microformat": {
+    "playerMicroformatRenderer": {
+      "publishDate": "2026-01-15"
+    }
+  }
+}

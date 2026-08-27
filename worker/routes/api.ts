@@ -142,7 +142,9 @@ api.post("/check", async (c) => {
   if (!videoUrl) return c.json({ error: "Video URL is required" }, 400);
 
   try {
-    const metadata = await fetchVideoMetadata(videoUrl);
+    const metadata = await fetchVideoMetadata(videoUrl, {
+      youtubeApiKey: c.env.YOUTUBE_API_KEY,
+    });
 
     const existingVideo = await getVideoByPlatformId(c.env.DB, metadata.platform, metadata.videoId);
     if (existingVideo) {
@@ -211,7 +213,9 @@ api.post("/submit", async (c) => {
 
   let metadata;
   try {
-    metadata = await fetchVideoMetadata(videoUrl);
+    metadata = await fetchVideoMetadata(videoUrl, {
+      youtubeApiKey: c.env.YOUTUBE_API_KEY,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not read video";
     return c.json({ error: message }, 400);
