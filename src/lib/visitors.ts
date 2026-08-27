@@ -5,6 +5,7 @@ const HEARTBEAT_MS = 25000;
 export interface VisitorCounts {
   liveVisitorCount: number;
   visitorsSinceLaunch: number;
+  statsShareUrl?: string;
 }
 
 async function postVisitors(): Promise<VisitorCounts> {

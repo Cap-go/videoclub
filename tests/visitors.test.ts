@@ -1,6 +1,7 @@
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../worker/index";
+import { resetDataFastCache } from "../worker/lib/datafast-analytics";
 import { ONLINE_WINDOW_MS, PRESENCE_COOKIE } from "../worker/lib/presence";
 import { initTestDb } from "./schema";
 
@@ -18,17 +19,149 @@ function cookieFromResponse(response: Response): string | undefined {
   return match?.[1];
 }
 
+function clearDataFastEnv() {
+  delete env.DATAFAST_API_KEY;
+  delete env.DATAFAST_SHARE_URL;
+}
+
 describe("visitors API", () => {
   beforeEach(async () => {
+    resetDataFastCache();
+    clearDataFastEnv();
     await initTestDb(env.DB);
     await env.DB.prepare("DELETE FROM presence").run();
   });
 
-  it("GET returns liveVisitorCount and visitorsSinceLaunch", async () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetDataFastCache();
+    clearDataFastEnv();
+  });
+
+  it("GET returns liveVisitorCount and visitorsSinceLaunch from D1 when DataFast key is missing", async () => {
     const res = await runWorker(new Request("http://example.com/api/visitors"));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toEqual({ liveVisitorCount: 0, visitorsSinceLaunch: 0 });
+  });
+
+  it("GET uses DataFast all-time visitors when overview succeeds", async () => {
+    env.DATAFAST_API_KEY = "df_test_key";
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/v1/analytics/overview")) {
+          expect(url).not.toContain("websiteId=");
+          return new Response(
+            JSON.stringify({ status: "success", data: [{ visitors: 412 }] }),
+            { status: 200 },
+          );
+        }
+        if (url.includes("/api/v1/analytics/realtime")) {
+          return new Response(
+            JSON.stringify({ status: "success", data: [{ visitors: 7 }] }),
+            { status: 200 },
+          );
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    await env.DB.prepare(
+      `INSERT INTO presence (visitor_id, first_seen, last_seen) VALUES (?, ?, ?)`,
+    )
+      .bind("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", new Date().toISOString(), new Date().toISOString())
+      .run();
+
+    const res = await runWorker(new Request("http://example.com/api/visitors"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ liveVisitorCount: 7, visitorsSinceLaunch: 412 });
+  });
+
+  it("falls back to D1 counts when DataFast key is missing", async () => {
+    const recentId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const recentLastSeen = new Date().toISOString();
+
+    await env.DB.prepare(
+      `INSERT INTO presence (visitor_id, first_seen, last_seen) VALUES (?, ?, ?)`,
+    )
+      .bind(recentId, recentLastSeen, recentLastSeen)
+      .run();
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await runWorker(new Request("http://example.com/api/visitors"));
+    const body = await res.json();
+    expect(body).toEqual({ liveVisitorCount: 1, visitorsSinceLaunch: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to D1 when DataFast overview fails", async () => {
+    env.DATAFAST_API_KEY = "df_test_key";
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/v1/analytics/overview")) {
+          return new Response("upstream error", { status: 502 });
+        }
+        if (url.includes("/api/v1/analytics/realtime")) {
+          return new Response(
+            JSON.stringify({ status: "success", data: [{ visitors: 3 }] }),
+            { status: 200 },
+          );
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    await env.DB.prepare(
+      `INSERT INTO presence (visitor_id, first_seen, last_seen) VALUES (?, ?, ?)`,
+    )
+      .bind("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", new Date().toISOString(), new Date().toISOString())
+      .run();
+
+    const res = await runWorker(new Request("http://example.com/api/visitors"));
+    const body = await res.json();
+    expect(body).toEqual({ liveVisitorCount: 3, visitorsSinceLaunch: 1 });
+  });
+
+  it("includes statsShareUrl when DATAFAST_SHARE_URL is set", async () => {
+    env.DATAFAST_API_KEY = "df_test_key";
+    env.DATAFAST_SHARE_URL = "https://datafa.st/share/example";
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/v1/analytics/overview")) {
+          return new Response(
+            JSON.stringify({ status: "success", data: [{ visitors: 100 }] }),
+            { status: 200 },
+          );
+        }
+        if (url.includes("/api/v1/analytics/realtime")) {
+          return new Response(
+            JSON.stringify({ status: "success", data: [{ visitors: 2 }] }),
+            { status: 200 },
+          );
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    const res = await runWorker(new Request("http://example.com/api/visitors"));
+    const body = await res.json();
+    expect(body).toEqual({
+      liveVisitorCount: 2,
+      visitorsSinceLaunch: 100,
+      statsShareUrl: "https://datafa.st/share/example",
+    });
   });
 
   it("POST increments total once per visitor cookie", async () => {

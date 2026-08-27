@@ -20,6 +20,19 @@ export function VisitorsPill() {
       <span>
         <span className="font-bold text-[#059669]">{formatCount(counts.liveVisitorCount)} online</span>
         <span> · {visitorsLabel} visitors</span>
+        {counts.statsShareUrl ? (
+          <>
+            {" · "}
+            <a
+              href={counts.statsShareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-[#059669] underline decoration-[#a7f3d0] underline-offset-2 hover:text-[#047857]"
+            >
+              see stats→
+            </a>
+          </>
+        ) : null}
       </span>
     </div>
   );

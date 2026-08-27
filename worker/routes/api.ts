@@ -43,12 +43,12 @@ import {
 } from "../lib/urls";
 import { fetchStartupLogo } from "../lib/logo";
 import {
-  getVisitorCounts,
   PRESENCE_COOKIE,
   PRESENCE_COOKIE_MAX_AGE,
   recordVisitor,
   resolveVisitorId,
 } from "../lib/presence";
+import { getPublicVisitorCounts } from "../lib/visitors";
 import { fetchVideoMetadata } from "../lib/video";
 import type { BoardPeriod, Env } from "../types";
 
@@ -105,7 +105,7 @@ api.get("/logo/:host", async (c) => {
 });
 
 api.get("/visitors", async (c) => {
-  const counts = await getVisitorCounts(c.env.DB);
+  const counts = await getPublicVisitorCounts(c.env);
   return c.json(counts);
 });
 
@@ -115,7 +115,8 @@ api.post("/visitors", async (c) => {
     (): { visitorId?: string } => ({}),
   )) as { visitorId?: string };
   const visitorId = resolveVisitorId(cookieId, body.visitorId);
-  const counts = await recordVisitor(c.env.DB, visitorId);
+  await recordVisitor(c.env.DB, visitorId);
+  const counts = await getPublicVisitorCounts(c.env);
 
   const secure = new URL(c.req.url).protocol === "https:";
   setCookie(c, PRESENCE_COOKIE, visitorId, {
