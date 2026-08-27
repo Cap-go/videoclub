@@ -2,8 +2,11 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   EMAIL?: SendEmail;
+  BROWSER?: BrowserRun;
   APP_URL: string;
   EMAIL_FROM: string;
+  /** Optional fetch-relay when platforms block the Worker IP. */
+  PROXY_URL?: string;
   /** Optional fallback when InnerTube/HTML scraping is blocked by YouTube. */
   YOUTUBE_API_KEY?: string;
 }
