@@ -2,7 +2,6 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   EMAIL?: SendEmail;
-  AI?: Ai;
   APP_URL: string;
   EMAIL_FROM: string;
 }
@@ -43,8 +42,6 @@ export interface LeaderboardEntry {
   id: number;
   rank: number;
   name: string;
-  founder_name: string | null;
-  name_unconfirmed: boolean;
   product_url: string;
   product_host: string;
   video_count: number;
@@ -62,7 +59,7 @@ export interface VideoMetadata {
   normalizedUrl: string;
 }
 
-export type EmailKind = "welcome" | "rank_changed" | "removed";
+export type EmailKind = "welcome" | "rank_changed" | "challenged" | "removed";
 
 export interface EmailPayload {
   kind: EmailKind;
@@ -73,5 +70,7 @@ export interface EmailPayload {
   previousRank?: number | null;
   videoUrl?: string;
   videoTitle?: string;
+  challengeReason?: string;
+  challengeCount?: number;
   removalReason?: string;
 }

@@ -44,8 +44,6 @@ export async function getLeaderboard(
       `SELECT
         s.id,
         s.name,
-        s.founder_name,
-        s.name_unconfirmed,
         s.product_url,
         s.product_host,
         COUNT(v.id) AS video_count,
@@ -74,8 +72,47 @@ export async function getLeaderboard(
   return rows.map((row) => ({
     ...row,
     video_count: Number(row.video_count),
-    name_unconfirmed: Boolean(row.name_unconfirmed),
     rank: rankMap.get(row.id) ?? 0,
+  }));
+}
+
+export async function getChallengeCount(db: D1Database, videoId: number): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS count FROM challenges WHERE video_id = ?")
+    .bind(videoId)
+    .first<{ count: number }>();
+  return Number(row?.count ?? 0);
+}
+
+export async function hasChallengedVideo(
+  db: D1Database,
+  videoId: number,
+  ipHash: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare("SELECT 1 FROM challenges WHERE video_id = ? AND ip_hash = ? LIMIT 1")
+    .bind(videoId, ipHash)
+    .first();
+  return !!row;
+}
+
+export async function getVideosWithChallengeCounts(
+  db: D1Database,
+  startupId: number,
+): Promise<Array<VideoRow & { challenge_count: number }>> {
+  const result = await db
+    .prepare(
+      `SELECT v.*,
+        (SELECT COUNT(*) FROM challenges c WHERE c.video_id = v.id) AS challenge_count
+       FROM videos v
+       WHERE v.startup_id = ? AND v.removed_at IS NULL
+       ORDER BY v.created_at DESC`,
+    )
+    .bind(startupId)
+    .all<VideoRow & { challenge_count: number }>();
+  return (result.results ?? []).map((v) => ({
+    ...v,
+    challenge_count: Number(v.challenge_count),
   }));
 }
 

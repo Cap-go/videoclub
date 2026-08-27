@@ -1,23 +1,24 @@
 import { Hono } from "hono";
 import {
+  getChallengeCount,
   getLeaderboard,
   getStartupByHostIncludingRemoved,
   getStartupById,
   getStartupRank,
   getVideoById,
   getVideoByPlatformId,
-  getVideosForStartup,
+  getVideosWithChallengeCounts,
+  hasChallengedVideo,
 } from "../db/queries";
 import { buildEmailContent, EMAIL_PREVIEW_FIXTURES } from "../lib/email-templates";
 import { notifyRankChange, sendEmail } from "../lib/email";
-import { requireFounderOnCamera } from "../lib/face";
-import { founderNameMatchesVideo, isValidFounderName } from "../lib/founder";
-import { rateLimitReport, rateLimitSubmit } from "../lib/rate-limit";
 import {
-  parseReportReason,
-  removalReasonText,
-  type ReportReason,
-} from "../lib/reports";
+  CHALLENGE_THRESHOLD,
+  challengedAsText,
+  parseChallengeReason,
+  REMOVED_HOST_MESSAGE,
+} from "../lib/challenges";
+import { rateLimitChallenge, rateLimitSubmit } from "../lib/rate-limit";
 import {
   DUPLICATE_VIDEO_MESSAGE,
   extractProductUrl,
@@ -67,13 +68,11 @@ api.get("/startups/:id/videos", async (c) => {
     return c.json({ error: "Startup not found" }, 404);
   }
 
-  const videos = await getVideosForStartup(c.env.DB, id);
+  const videos = await getVideosWithChallengeCounts(c.env.DB, id);
   return c.json({
     startup: {
       id: startup.id,
       name: startup.name,
-      founder_name: startup.founder_name,
-      name_unconfirmed: Boolean(startup.name_unconfirmed),
       product_url: startup.product_url,
       product_host: startup.product_host,
     },
@@ -85,6 +84,7 @@ api.get("/startups/:id/videos", async (c) => {
       thumbnail: v.thumbnail,
       published_at: v.published_at,
       submitted_at: v.created_at,
+      challenge_count: v.challenge_count,
     })),
   });
 });
@@ -97,18 +97,10 @@ api.post("/check", async (c) => {
   try {
     const metadata = await fetchVideoMetadata(videoUrl);
 
-    try {
-      await requireFounderOnCamera(c.env, metadata.thumbnail);
-    } catch (faceErr) {
-      const message = faceErr instanceof Error ? faceErr.message : "Founder face required";
-      return c.json({ emailRequired: false, productFound: false, error: message });
-    }
-
     const existingVideo = await getVideoByPlatformId(c.env.DB, metadata.platform, metadata.videoId);
     if (existingVideo) {
       return c.json({
         emailRequired: false,
-        founderNameRequired: false,
         productFound: false,
         duplicate: true,
         error: DUPLICATE_VIDEO_MESSAGE,
@@ -119,7 +111,6 @@ api.post("/check", async (c) => {
     if (!productUrl) {
       return c.json({
         emailRequired: false,
-        founderNameRequired: false,
         productFound: false,
         error: "No product link found in the video description. Add your startup URL (not YouTube/TikTok/Instagram).",
       });
@@ -127,15 +118,18 @@ api.post("/check", async (c) => {
 
     const productHost = normalizeProductHost(productUrl);
     if (!productHost) {
-      return c.json({ emailRequired: false, founderNameRequired: false, productFound: false, error: "Invalid product URL in description." });
+      return c.json({ emailRequired: false, productFound: false, error: "Invalid product URL in description." });
     }
 
     const existing = await getStartupByHostIncludingRemoved(c.env.DB, productHost);
-    const isNewStartup = !existing || !!existing.removed_at;
+    if (existing?.removed_at) {
+      return c.json({ emailRequired: false, productFound: false, error: REMOVED_HOST_MESSAGE });
+    }
+
+    const emailRequired = !existing;
 
     return c.json({
-      emailRequired: isNewStartup,
-      founderNameRequired: isNewStartup,
+      emailRequired,
       productFound: true,
       productUrl,
       productHost,
@@ -144,7 +138,7 @@ api.post("/check", async (c) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not read video";
-    return c.json({ emailRequired: false, founderNameRequired: false, productFound: false, error: message });
+    return c.json({ emailRequired: false, productFound: false, error: message });
   }
 });
 
@@ -159,12 +153,11 @@ api.post("/submit", async (c) => {
   }
 
   const body = await c.req
-    .json<{ videoUrl?: string; email?: string; founderName?: string }>()
-    .catch(() => ({ videoUrl: undefined, email: undefined, founderName: undefined }));
+    .json<{ videoUrl?: string; email?: string }>()
+    .catch(() => ({ videoUrl: undefined, email: undefined }));
 
   const videoUrl = body.videoUrl?.trim();
   const email = body.email?.trim().toLowerCase();
-  const founderName = body.founderName?.trim();
 
   if (!videoUrl) return c.json({ error: "Video URL is required" }, 400);
 
@@ -173,13 +166,6 @@ api.post("/submit", async (c) => {
     metadata = await fetchVideoMetadata(videoUrl);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not read video";
-    return c.json({ error: message }, 400);
-  }
-
-  try {
-    await requireFounderOnCamera(c.env, metadata.thumbnail);
-  } catch (faceErr) {
-    const message = faceErr instanceof Error ? faceErr.message : "Founder face required";
     return c.json({ error: message }, 400);
   }
 
@@ -205,8 +191,13 @@ api.post("/submit", async (c) => {
   }
 
   const normalizedProductUrl = normalizeProductUrl(productUrlFound) ?? productUrlFound;
-  let startup = await getStartupByHostIncludingRemoved(c.env.DB, productHost);
-  const isNewStartup = !startup || !!startup.removed_at;
+  const startup = await getStartupByHostIncludingRemoved(c.env.DB, productHost);
+
+  if (startup?.removed_at) {
+    return c.json({ error: REMOVED_HOST_MESSAGE }, 403);
+  }
+
+  const isNewStartup = !startup;
 
   if (isNewStartup) {
     if (!email || !isValidEmail(email)) {
@@ -215,69 +206,19 @@ api.post("/submit", async (c) => {
         400,
       );
     }
-    if (!founderName || !isValidFounderName(founderName)) {
-      return c.json(
-        {
-          error: "Founder name is required the first time your startup is added (2–80 characters).",
-          founderNameRequired: true,
-        },
-        400,
-      );
-    }
   }
-
-  const nameConfirmed =
-    isNewStartup && founderName
-      ? founderNameMatchesVideo(
-          founderName,
-          metadata.title,
-          metadata.author,
-          metadata.description,
-        )
-      : true;
-  const nameUnconfirmed = isNewStartup ? (nameConfirmed ? 0 : 1) : 0;
 
   const now = new Date().toISOString();
   let startupId: number;
 
   if (isNewStartup) {
-    if (startup?.removed_at) {
-      await c.env.DB.prepare(
-        `UPDATE startups SET
-          product_url = ?, name = ?, founder_name = ?, name_unconfirmed = ?, email = ?, created_at = ?, removed_at = NULL,
-          removal_reason = NULL, last_notified_rank = NULL
-         WHERE id = ?`,
-      )
-        .bind(
-          normalizedProductUrl,
-          hostToName(productHost),
-          founderName!,
-          nameUnconfirmed,
-          email!,
-          now,
-          startup.id,
-        )
-        .run();
-      startupId = startup.id;
-      startup = await getStartupById(c.env.DB, startupId);
-    } else {
-      const insert = await c.env.DB.prepare(
-        `INSERT INTO startups (product_url, product_host, name, founder_name, name_unconfirmed, email, created_at, last_notified_rank)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL)`,
-      )
-        .bind(
-          normalizedProductUrl,
-          productHost,
-          hostToName(productHost),
-          founderName!,
-          nameUnconfirmed,
-          email!,
-          now,
-        )
-        .run();
-      startupId = Number(insert.meta.last_row_id);
-      startup = await getStartupById(c.env.DB, startupId);
-    }
+    const insert = await c.env.DB.prepare(
+      `INSERT INTO startups (product_url, product_host, name, email, created_at, last_notified_rank)
+       VALUES (?, ?, ?, ?, ?, NULL)`,
+    )
+      .bind(normalizedProductUrl, productHost, hostToName(productHost), email!, now)
+      .run();
+    startupId = Number(insert.meta.last_row_id);
   } else {
     startupId = startup!.id;
   }
@@ -338,8 +279,6 @@ api.post("/submit", async (c) => {
     startup: {
       id: startupId,
       name: freshStartup?.name ?? hostToName(productHost),
-      founder_name: freshStartup?.founder_name ?? founderName ?? null,
-      name_unconfirmed: Boolean(freshStartup?.name_unconfirmed),
       product_url: normalizedProductUrl,
       rank,
     },
@@ -352,12 +291,12 @@ api.post("/submit", async (c) => {
   });
 });
 
-api.post("/report/:videoId", async (c) => {
+api.post("/challenge/:videoId", async (c) => {
   const ipHash = await hashIp(clientIp(c));
-  const limited = await rateLimitReport(c.env.DB, ipHash);
+  const limited = await rateLimitChallenge(c.env.DB, ipHash);
   if (!limited.allowed) {
     return c.json(
-      { error: `Too many reports. Try again in ${limited.retryAfterSeconds ?? 3600} seconds.` },
+      { error: `Too many challenges. Try again in ${limited.retryAfterSeconds ?? 3600} seconds.` },
       429,
     );
   }
@@ -366,7 +305,10 @@ api.post("/report/:videoId", async (c) => {
   if (!Number.isFinite(videoId)) return c.json({ error: "Invalid video id" }, 400);
 
   const body = await c.req.json<{ reason?: string }>().catch((): { reason?: string } => ({}));
-  const reason: ReportReason = parseReportReason(body.reason) ?? "ai";
+  const reason = parseChallengeReason(body.reason);
+  if (!reason) {
+    return c.json({ error: "Invalid challenge reason." }, 400);
+  }
 
   const video = await getVideoById(c.env.DB, videoId);
   if (!video || video.removed_at) {
@@ -378,38 +320,79 @@ api.post("/report/:videoId", async (c) => {
     return c.json({ error: "Startup not found" }, 404);
   }
 
+  if (await hasChallengedVideo(c.env.DB, videoId, ipHash)) {
+    return c.json({ error: "You already challenged this video." }, 409);
+  }
+
   const now = new Date().toISOString();
-  const removalReason = removalReasonText(reason);
+  try {
+    await c.env.DB.prepare(
+      "INSERT INTO challenges (video_id, reason, ip_hash, created_at) VALUES (?, ?, ?, ?)",
+    )
+      .bind(videoId, reason, ipHash, now)
+      .run();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("UNIQUE constraint")) {
+      return c.json({ error: "You already challenged this video." }, 409);
+    }
+    console.error("[challenge] insert failed", err);
+    return c.json({ error: "Failed to record challenge." }, 500);
+  }
 
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      "INSERT INTO reports (video_id, reason, ip_hash, created_at) VALUES (?, ?, ?, ?)",
-    ).bind(videoId, reason, ipHash, now),
-    c.env.DB.prepare("UPDATE videos SET removed_at = ? WHERE startup_id = ?").bind(now, startup.id),
-    c.env.DB.prepare(
-      "UPDATE startups SET removed_at = ?, removal_reason = ? WHERE id = ?",
-    ).bind(now, removalReason, startup.id),
-  ]);
+  const challengeCount = await getChallengeCount(c.env.DB, videoId);
+  const reachedThreshold = challengeCount >= CHALLENGE_THRESHOLD;
 
-  c.executionCtx.waitUntil(
-    (async () => {
-      await sendEmail(c.env, {
-        kind: "removed",
+  if (reachedThreshold) {
+    const removalReason = `Removed after ${challengeCount} community challenges`;
+    await c.env.DB.batch([
+      c.env.DB.prepare("UPDATE videos SET removed_at = ? WHERE startup_id = ?").bind(now, startup.id),
+      c.env.DB.prepare(
+        "UPDATE startups SET removed_at = ?, removal_reason = ? WHERE id = ?",
+      ).bind(now, removalReason, startup.id),
+    ]);
+
+    c.executionCtx.waitUntil(
+      (async () => {
+        await sendEmail(c.env, {
+          kind: "removed",
+          to: startup.email,
+          startupName: startup.name,
+          productUrl: startup.product_url,
+          videoUrl: video.video_url,
+          videoTitle: video.title,
+          removalReason,
+          challengeCount,
+        });
+
+        const board = await getLeaderboard(c.env.DB, "all");
+        for (const entry of board) {
+          const other = await getStartupById(c.env.DB, entry.id);
+          if (other) await notifyRankChange(c.env, c.env.DB, other, entry.rank);
+        }
+      })(),
+    );
+  } else if (challengeCount === 1) {
+    c.executionCtx.waitUntil(
+      sendEmail(c.env, {
+        kind: "challenged",
         to: startup.email,
         startupName: startup.name,
         productUrl: startup.product_url,
         videoUrl: video.video_url,
         videoTitle: video.title,
-        removalReason,
-      });
+        challengeReason: challengedAsText(reason),
+        challengeCount,
+      }),
+    );
+  }
 
-      const board = await getLeaderboard(c.env.DB, "all");
-      for (const entry of board) {
-        const other = await getStartupById(c.env.DB, entry.id);
-        if (other) await notifyRankChange(c.env, c.env.DB, other, entry.rank);
-      }
-    })(),
-  );
-
-  return c.json({ ok: true, message: "Report accepted. Startup removed from the board." });
+  return c.json({
+    ok: true,
+    challengeCount,
+    removed: reachedThreshold,
+    message: reachedThreshold
+      ? "Three challenges reached. Startup removed from the board."
+      : `Challenge recorded (${challengeCount}/${CHALLENGE_THRESHOLD}).`,
+  });
 });
