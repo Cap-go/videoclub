@@ -126,6 +126,7 @@ export function challengeVideo(videoId: number, reason: ChallengeReason = "ai") 
 }
 
 export interface EmailPreview {
+  id?: string;
   kind: string;
   subject: string;
   text: string;

@@ -99,9 +99,9 @@ api.get("/feed", async (c) => {
 });
 
 api.get("/dev/email-previews", (c) => {
-  const previews = EMAIL_PREVIEW_FIXTURES.map((payload) => {
-    const content = buildEmailContent(payload, c.env.APP_URL);
-    return { kind: payload.kind, ...content };
+  const previews = EMAIL_PREVIEW_FIXTURES.map((fixture) => {
+    const content = buildEmailContent(fixture.payload, c.env.APP_URL);
+    return { id: fixture.id, kind: fixture.payload.kind, ...content };
   });
   return c.json({ previews });
 });
