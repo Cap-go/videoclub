@@ -1,0 +1,306 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useOutletContext } from "react-router-dom";
+import { LivePill } from "../components/LivePill";
+import { RankCard } from "../components/RankCard";
+import {
+  checkVideo,
+  getLeaderboard,
+  getStartupVideos,
+  reportVideo,
+  submitVideo,
+  type BoardPeriod,
+  type LeaderboardEntry,
+  type ReportReason,
+  type StartupVideo,
+} from "../lib/api";
+
+export function Home() {
+  const { period } = useOutletContext<{ period: BoardPeriod }>();
+  const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedVideos, setExpandedVideos] = useState<StartupVideo[]>([]);
+  const [videosLoading, setVideosLoading] = useState(false);
+
+  const [videoUrl, setVideoUrl] = useState("");
+  const [email, setEmail] = useState("");
+  const [founderName, setFounderName] = useState("");
+  const [emailRequired, setEmailRequired] = useState(false);
+  const [founderNameRequired, setFounderNameRequired] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formSuccess, setFormSuccess] = useState<string | null>(null);
+  const [productPreview, setProductPreview] = useState<string | null>(null);
+
+  const loadBoard = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getLeaderboard(period);
+      setEntries(data.entries);
+    } catch {
+      setEntries([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [period]);
+
+  useEffect(() => {
+    void loadBoard();
+  }, [loadBoard]);
+
+  const totalVideos = useMemo(
+    () => entries.reduce((sum, entry) => sum + entry.video_count, 0),
+    [entries],
+  );
+
+  const claimTarget = entries[0]?.video_count ? entries[0].video_count + 1 : 1;
+
+  const toggleRow = async (entry: LeaderboardEntry) => {
+    if (expandedId === entry.id) {
+      setExpandedId(null);
+      setExpandedVideos([]);
+      return;
+    }
+    setExpandedId(entry.id);
+    setVideosLoading(true);
+    try {
+      const data = await getStartupVideos(entry.id);
+      setExpandedVideos(data.videos);
+    } catch {
+      setExpandedVideos([]);
+    } finally {
+      setVideosLoading(false);
+    }
+  };
+
+  const handleVideoUrlBlur = async () => {
+    const url = videoUrl.trim();
+    if (!url) {
+      setEmailRequired(false);
+      setFounderNameRequired(false);
+      setProductPreview(null);
+      return;
+    }
+    setChecking(true);
+    setFormError(null);
+    try {
+      const result = await checkVideo(url);
+      if (result.error) {
+        setFormError(result.error);
+        setEmailRequired(false);
+        setFounderNameRequired(false);
+        setProductPreview(null);
+        return;
+      }
+      setEmailRequired(result.emailRequired);
+      setFounderNameRequired(result.founderNameRequired ?? result.emailRequired);
+      setProductPreview(result.productUrl ?? null);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Check failed");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    setFormSuccess(null);
+    setSubmitting(true);
+    try {
+      const result = await submitVideo(
+        videoUrl.trim(),
+        email.trim() || undefined,
+        founderName.trim() || undefined,
+      );
+      setFormSuccess(
+        `Posted "${result.video.title}" — ${result.startup.name} is now #${result.startup.rank}`,
+      );
+      setVideoUrl("");
+      setEmail("");
+      setFounderName("");
+      setEmailRequired(false);
+      setFounderNameRequired(false);
+      setProductPreview(null);
+      await loadBoard();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Submit failed";
+      setFormError(message);
+      if (message.includes("Email is required")) setEmailRequired(true);
+      if (message.includes("Founder name is required")) setFounderNameRequired(true);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReport = async (videoId: number, reason: ReportReason) => {
+    const labels: Record<ReportReason, string> = {
+      ai: "AI video",
+      not_founder: "not the founder",
+      no_product_link: "no product link",
+      other: "other issue",
+    };
+    if (
+      !confirm(
+        `Report as "${labels[reason]}"? One report removes the video and the entire startup from the board.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await reportVideo(videoId, reason);
+      setExpandedId(null);
+      setExpandedVideos([]);
+      await loadBoard();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Report failed");
+    }
+  };
+
+  return (
+    <div className="space-y-10">
+      <LivePill startupCount={entries.length} videoCount={totalVideos} />
+
+      <section className="mx-auto max-w-4xl space-y-4 pt-2 text-center">
+        <h1 className="text-4xl font-bold leading-tight tracking-tight text-[#111] sm:text-5xl md:text-6xl">
+          Claim #1 with{" "}
+          <span className="text-[#f4623a]">{claimTarget} video{claimTarget === 1 ? "" : "s"}</span>
+        </h1>
+        <p className="mx-auto max-w-2xl text-base text-[#6b7280] sm:text-lg">
+          Out-publish everyone to rank #1 — that&apos;s it. Posting fewer than #1 still puts you on the board
+          at whatever place that count can take.
+        </p>
+        <p className="text-sm text-[#9ca3af]">No ads. No API keys. No login.</p>
+      </section>
+
+      <section className="mx-auto max-w-4xl">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[#9ca3af]">
+                ▶
+              </span>
+              <input
+                id="videoUrl"
+                type="url"
+                required
+                placeholder="Paste YouTube, TikTok, or Instagram URL"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                onBlur={() => void handleVideoUrlBlur()}
+                className="w-full rounded-2xl border border-[#e8e4df] bg-white py-3.5 pl-10 pr-4 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20"
+              />
+            </div>
+            <input
+              id="email"
+              type="email"
+              required={emailRequired}
+              placeholder={emailRequired ? "Email (required)" : "Email (first time only)"}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:w-56"
+            />
+            {founderNameRequired && (
+              <input
+                id="founderName"
+                type="text"
+                required
+                placeholder="Founder name (required)"
+                value={founderName}
+                onChange={(e) => setFounderName(e.target.value)}
+                className="w-full rounded-2xl border border-[#e8e4df] bg-white px-4 py-3.5 text-[#111] outline-none transition focus:border-[#f4623a] focus:ring-2 focus:ring-[#f4623a]/20 sm:w-48"
+              />
+            )}
+            <button
+              type="submit"
+              disabled={submitting || checking}
+              className="shrink-0 rounded-2xl bg-[#f4623a] px-6 py-3.5 text-base font-semibold text-white transition hover:bg-[#e8573a] disabled:opacity-50"
+            >
+              {submitting ? "Posting…" : "Post"}
+            </button>
+          </div>
+
+          {productPreview && (
+            <p className="text-center text-sm text-[#6b7280]">
+              Product in description:{" "}
+              <a
+                href={productPreview}
+                className="font-medium text-[#f4623a] hover:underline"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {productPreview}
+              </a>
+            </p>
+          )}
+
+          {checking && <p className="text-center text-sm text-[#9ca3af]">Reading video description…</p>}
+          {formError && <p className="text-center text-sm text-[#dc2626]">{formError}</p>}
+          {formSuccess && <p className="text-center text-sm font-medium text-[#059669]">{formSuccess}</p>}
+        </form>
+      </section>
+
+      <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-10">
+        <aside className="hidden space-y-4 lg:block">
+          <div className="rounded-2xl border border-[#e8e4df] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#9ca3af]">How it works</p>
+            <ul className="mt-3 space-y-2 text-sm text-[#6b7280]">
+              <li>Paste a founder video URL</li>
+              <li>Product link must be in the description today</li>
+              <li>Old videos count on All-time — dump your back catalog</li>
+              <li>Same video id never counts twice</li>
+            </ul>
+          </div>
+          <div className="rounded-2xl border border-[#fcd4c4] bg-[#fff9f7] p-4">
+            <p className="text-sm font-semibold text-[#111]">Rank is the videos — nothing else.</p>
+            <p className="mt-2 text-sm text-[#6b7280]">
+              Real founder. Real product link. Community reports keep the board honest.
+            </p>
+          </div>
+        </aside>
+
+        <section className="min-w-0 space-y-4">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-[#111]">Leaderboard</h2>
+              <p className="mt-1 text-sm text-[#9ca3af]">
+                {period === "today"
+                  ? "Videos published in the last 24h (or submitted today if publish date unknown)."
+                  : "Every valid video counts — including your back catalog."}
+              </p>
+            </div>
+            {!loading && entries.length > 0 && (
+              <span className="text-sm text-[#9ca3af]">{entries.length} on the board</span>
+            )}
+          </div>
+
+          {loading ? (
+            <p className="text-[#6b7280]">Loading…</p>
+          ) : entries.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[#e8e4df] bg-white p-10 text-center">
+              <p className="text-lg font-semibold text-[#111]">Be the first founder on camera.</p>
+              <p className="mt-2 text-sm text-[#6b7280]">
+                Post one video with your product link in the description. You&apos;re #1.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {entries.map((entry) => (
+                <RankCard
+                  key={entry.id}
+                  entry={entry}
+                  expanded={expandedId === entry.id}
+                  videosLoading={videosLoading}
+                  videos={expandedId === entry.id ? expandedVideos : []}
+                  onToggle={() => void toggleRow(entry)}
+                  onReport={(id, reason) => void handleReport(id, reason)}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
