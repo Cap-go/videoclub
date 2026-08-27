@@ -1,4 +1,5 @@
 const DATAFAST_HOST = "datafa.st";
+const DATAFAST_WIDGET_ID = "6a90233b9514c70c504828be";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "host",
@@ -48,6 +49,22 @@ export async function proxyDatafastScript(request: Request): Promise<Response> {
   return new Response(response.body, {
     status: response.status,
     headers,
+  });
+}
+
+export async function proxyDatafastWidget(request: Request): Promise<Response> {
+  const query = new URL(request.url).search;
+  const response = await fetch(
+    `https://${DATAFAST_HOST}/widgets/${DATAFAST_WIDGET_ID}/realtime${query}`,
+    {
+      method: request.method,
+      headers: filterHeaders(request.headers),
+    },
+  );
+
+  return new Response(response.body, {
+    status: response.status,
+    headers: response.headers,
   });
 }
 
