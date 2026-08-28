@@ -1,6 +1,7 @@
 import { useVisitors } from "../lib/visitors";
 import { formatCount } from "../lib/format";
 
+/** Live presence — green pulse chip, distinct from board-stats LivePill. */
 export function VisitorsPill() {
   const counts = useVisitors();
 

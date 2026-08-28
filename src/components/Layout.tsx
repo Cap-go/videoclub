@@ -29,11 +29,16 @@ export function Layout() {
 
           {location.pathname === "/" && (
             <div className="order-last flex w-full justify-center sm:order-none sm:w-auto">
-              <div className="inline-flex rounded-full border border-[#e8e4df] bg-white p-1 text-sm">
+              <div
+                className="grid grid-cols-2 rounded-full border border-[#e8e4df] bg-white p-0.5 text-sm"
+                role="group"
+                aria-label="Leaderboard period"
+              >
                 <button
                   type="button"
                   onClick={() => setPeriod("all")}
-                  className={`rounded-full px-4 py-1.5 font-medium transition ${
+                  aria-pressed={period === "all"}
+                  className={`rounded-full px-5 py-1.5 font-medium transition ${
                     period === "all" ? "bg-[#111] text-white" : "text-[#6b7280] hover:text-[#111]"
                   }`}
                 >
@@ -42,7 +47,8 @@ export function Layout() {
                 <button
                   type="button"
                   onClick={() => setPeriod("today")}
-                  className={`rounded-full px-4 py-1.5 font-medium transition ${
+                  aria-pressed={period === "today"}
+                  className={`rounded-full px-5 py-1.5 font-medium transition ${
                     period === "today" ? "bg-[#111] text-white" : "text-[#6b7280] hover:text-[#111]"
                   }`}
                 >
@@ -76,7 +82,7 @@ export function Layout() {
         <Outlet context={{ period }} />
       </main>
 
-      <footer className="border-t border-[#e8e4df] px-4 py-8 text-center text-sm text-[#6b7280]">
+      <footer className="border-t border-[#fcd4c4] bg-[#fff4f0] px-4 py-10 text-center text-sm text-[#6b7280]">
         <p className="font-medium text-[#111]">Rank is the videos. Same count — older oldest video wins.</p>
         <p className="mt-2 text-xs">
           Made by{" "}
@@ -84,7 +90,7 @@ export function Layout() {
             href="https://x.com/martindonadieu"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-[#f4623a]"
+            className="font-medium text-[#c2410c] hover:underline"
           >
             @martindonadieu
           </a>
@@ -93,26 +99,32 @@ export function Layout() {
             href="https://capgo.app"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-[#f4623a]"
+            className="font-medium text-[#c2410c] hover:underline"
           >
             Capgo
           </a>
           .
         </p>
-        <p className="mt-2">
-          <Link to="/feed" className="hover:text-[#f4623a]">
+        <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[#c2410c]">
+          <Link to="/feed" className="hover:text-[#f4623a] hover:underline">
             Feed
           </Link>
-          {" · "}
-          <Link to="/rules" className="hover:text-[#f4623a]">
+          <span className="text-[#fcd4c4]" aria-hidden>
+            ·
+          </span>
+          <Link to="/rules" className="hover:text-[#f4623a] hover:underline">
             Rules
           </Link>
-          {" · "}
-          <Link to="/manifesto" className="hover:text-[#f4623a]">
+          <span className="text-[#fcd4c4]" aria-hidden>
+            ·
+          </span>
+          <Link to="/manifesto" className="hover:text-[#f4623a] hover:underline">
             Manifesto
           </Link>
-          {" · "}
-          <Link to="/about" className="hover:text-[#f4623a]">
+          <span className="text-[#fcd4c4]" aria-hidden>
+            ·
+          </span>
+          <Link to="/about" className="hover:text-[#f4623a] hover:underline">
             About
           </Link>
         </p>

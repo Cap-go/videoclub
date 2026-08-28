@@ -80,6 +80,16 @@ describe("URL parsing", () => {
   it("normalizes product hosts", () => {
     expect(normalizeProductHost("https://www.Capgo.app/pricing")).toBe("capgo.app");
     expect(normalizeProductHost("https://youtube.com/watch?v=1")).toBeNull();
+    expect(normalizeProductHost("https://consent.youtube.com/")).toBeNull();
+    expect(normalizeProductHost("consent.youtube.com")).toBeNull();
+  });
+
+  it("rejects platform subdomains as product hosts", () => {
+    expect(extractProductUrl("Check https://consent.youtube.com and https://capgo.app")).toBe(
+      "https://capgo.app",
+    );
+    expect(normalizeProductHost("https://m.youtube.com")).toBeNull();
+    expect(normalizeProductHost("https://vm.tiktok.com/abc")).toBeNull();
   });
 
   it("extracts first non-platform product URL from description", () => {

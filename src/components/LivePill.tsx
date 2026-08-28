@@ -5,20 +5,17 @@ interface LivePillProps {
   totalPlays: number;
 }
 
+/** Board totals — neutral chip so it doesn't compete with the live visitors pill. */
 export function LivePill({ startupCount, videoCount, totalClicks, totalPlays }: LivePillProps) {
   return (
     <div className="flex justify-center">
-      <div className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-[#d1fae5] bg-[#ecfdf5] px-4 py-1.5 text-sm text-[#065f46]">
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#34d399] opacity-60" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-[#10b981]" />
-        </span>
+      <div className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-full border border-[#e8e4df] bg-white px-4 py-1.5 text-sm text-[#6b7280] shadow-[0_1px_0_rgba(17,17,17,0.03)]">
         <span>
           {startupCount} startup{startupCount === 1 ? "" : "s"} · {videoCount} video
           {videoCount === 1 ? "" : "s"} posted
         </span>
-        <span className="hidden text-[#6ee7b7] sm:inline">·</span>
-        <span className="font-medium">
+        <span className="hidden text-[#d1d5db] sm:inline">·</span>
+        <span>
           {totalClicks} product click{totalClicks === 1 ? "" : "s"} · {totalPlays} on-site play
           {totalPlays === 1 ? "" : "s"}
         </span>
