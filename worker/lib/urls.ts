@@ -137,6 +137,14 @@ function cleanUrl(raw: string): string {
   return raw.replace(/[.,;:!?)}\]]+$/g, "");
 }
 
+/** Collapse accidental spaces before dots — e.g. `https://soka .health` → `https://soka.health`. */
+function collapseSpacedDomainDots(text: string): string {
+  return text.replace(
+    /(https?:\/\/)?([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)\s+\.([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)/gi,
+    "$1$2.$3",
+  );
+}
+
 function isBlockedProductUrl(urlStr: string): boolean {
   const host = normalizeProductHost(urlStr);
   return !host;
@@ -152,6 +160,7 @@ function tryNormalizeProductUrl(candidate: string): string | null {
 export function extractProductUrls(description: string): string[] {
   if (!description) return [];
 
+  const text = collapseSpacedDomainDots(description);
   const seenHosts = new Set<string>();
   const urls: string[] = [];
 
@@ -164,11 +173,11 @@ export function extractProductUrls(description: string): string[] {
     urls.push(normalized);
   };
 
-  for (const match of description.match(URL_REGEX) ?? []) {
+  for (const match of text.match(URL_REGEX) ?? []) {
     addCandidate(match);
   }
 
-  for (const match of description.matchAll(BARE_DOMAIN_REGEX)) {
+  for (const match of text.matchAll(BARE_DOMAIN_REGEX)) {
     const domain = match[1];
     if (!domain || domain.includes("@")) continue;
     addCandidate(domain);

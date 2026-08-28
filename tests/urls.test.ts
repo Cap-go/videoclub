@@ -92,6 +92,14 @@ describe("URL parsing", () => {
     expect(normalizeProductHost("https://vm.tiktok.com/abc")).toBeNull();
   });
 
+  it("extracts product URL when a space was inserted before the TLD", () => {
+    expect(extractProductUrl("https://soka .health")).toBe("https://soka.health");
+    expect(extractProductUrl("Best app\n\nhttps://soka .health\n\nHow it helps")).toBe(
+      "https://soka.health",
+    );
+    expect(extractProductUrl("visit soka .health today")).toBe("https://soka.health");
+  });
+
   it("extracts first non-platform product URL from description", () => {
     const desc = "Built with AI? No. Check https://capgo.app and also https://youtube.com/watch?v=1";
     expect(extractProductUrl(desc)).toBe("https://capgo.app");
