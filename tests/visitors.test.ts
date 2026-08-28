@@ -42,7 +42,11 @@ describe("visitors API", () => {
     const res = await runWorker(new Request("http://example.com/api/visitors"));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ liveVisitorCount: 0, visitorsSinceLaunch: 0 });
+    expect(body).toEqual({
+      liveVisitorCount: 0,
+      visitorsSinceLaunch: 0,
+      sources: { live: "d1", total: "d1" },
+    });
   });
 
   it("GET uses DataFast all-time visitors when overview succeeds", async () => {
@@ -54,6 +58,7 @@ describe("visitors API", () => {
         const url = String(input);
         if (url.includes("/api/v1/analytics/overview")) {
           expect(url).not.toContain("websiteId=");
+          expect(url).toContain("fields=visitors");
           return new Response(
             JSON.stringify({ status: "success", data: [{ visitors: 412 }] }),
             { status: 200 },
@@ -78,7 +83,11 @@ describe("visitors API", () => {
     const res = await runWorker(new Request("http://example.com/api/visitors"));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ liveVisitorCount: 7, visitorsSinceLaunch: 412 });
+    expect(body).toEqual({
+      liveVisitorCount: 7,
+      visitorsSinceLaunch: 412,
+      sources: { live: "datafast", total: "datafast" },
+    });
   });
 
   it("falls back to D1 counts when DataFast key is missing", async () => {
@@ -96,7 +105,11 @@ describe("visitors API", () => {
 
     const res = await runWorker(new Request("http://example.com/api/visitors"));
     const body = await res.json();
-    expect(body).toEqual({ liveVisitorCount: 1, visitorsSinceLaunch: 1 });
+    expect(body).toEqual({
+      liveVisitorCount: 1,
+      visitorsSinceLaunch: 1,
+      sources: { live: "d1", total: "d1" },
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -128,7 +141,11 @@ describe("visitors API", () => {
 
     const res = await runWorker(new Request("http://example.com/api/visitors"));
     const body = await res.json();
-    expect(body).toEqual({ liveVisitorCount: 3, visitorsSinceLaunch: 1 });
+    expect(body).toEqual({
+      liveVisitorCount: 3,
+      visitorsSinceLaunch: 1,
+      sources: { live: "datafast", total: "d1" },
+    });
   });
 
   it("includes statsShareUrl when DATAFAST_SHARE_URL is set", async () => {
@@ -161,6 +178,7 @@ describe("visitors API", () => {
       liveVisitorCount: 2,
       visitorsSinceLaunch: 100,
       statsShareUrl: "https://datafa.st/share/example",
+      sources: { live: "datafast", total: "datafast" },
     });
   });
 
@@ -174,7 +192,11 @@ describe("visitors API", () => {
     );
     expect(first.status).toBe(200);
     const firstBody = await first.json();
-    expect(firstBody).toEqual({ liveVisitorCount: 1, visitorsSinceLaunch: 1 });
+    expect(firstBody).toEqual({
+      liveVisitorCount: 1,
+      visitorsSinceLaunch: 1,
+      sources: { live: "d1", total: "d1" },
+    });
 
     const visitorId = cookieFromResponse(first);
     expect(visitorId).toBeTruthy();
@@ -191,7 +213,11 @@ describe("visitors API", () => {
     );
     expect(second.status).toBe(200);
     const secondBody = await second.json();
-    expect(secondBody).toEqual({ liveVisitorCount: 1, visitorsSinceLaunch: 1 });
+    expect(secondBody).toEqual({
+      liveVisitorCount: 1,
+      visitorsSinceLaunch: 1,
+      sources: { live: "d1", total: "d1" },
+    });
   });
 
   it("counts only visitors seen within the online window", async () => {
@@ -208,7 +234,11 @@ describe("visitors API", () => {
 
     const res = await runWorker(new Request("http://example.com/api/visitors"));
     const body = await res.json();
-    expect(body).toEqual({ liveVisitorCount: 1, visitorsSinceLaunch: 2 });
+    expect(body).toEqual({
+      liveVisitorCount: 1,
+      visitorsSinceLaunch: 2,
+      sources: { live: "d1", total: "d1" },
+    });
   });
 
   it("creates presence table on write when migration has not run", async () => {
@@ -224,6 +254,10 @@ describe("visitors API", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ liveVisitorCount: 1, visitorsSinceLaunch: 1 });
+    expect(body).toEqual({
+      liveVisitorCount: 1,
+      visitorsSinceLaunch: 1,
+      sources: { live: "d1", total: "d1" },
+    });
   });
 });
