@@ -26,12 +26,17 @@ const BLOCKED_HOSTS = new Set([
 
 const X_HOSTS = new Set(["x.com", "twitter.com", "mobile.x.com", "mobile.twitter.com"]);
 
-/** Platform/vendor chrome — exact host or any subdomain (e.g. support.google.com). */
+/** Platform/vendor chrome — exact host or any subdomain (e.g. support.google.com, consent.youtube.com). */
 const BLOCKED_PARENT_DOMAINS = [
   "google.com",
   "withgoogle.com",
-  "apple.com",
+  "youtube.com",
+  "tiktok.com",
+  "instagram.com",
   "facebook.com",
+  "twitter.com",
+  "x.com",
+  "apple.com",
   "microsoft.com",
   "spotify.com",
 ];

@@ -1,25 +1,25 @@
-const TIER_RANKS = [10, 20] as const;
+const TIER_STEP = 10;
 
-export type BoardTierLabel = "Top 10" | "Top 20";
-
-export function boardTierLabel(rank: number): BoardTierLabel | null {
-  if (rank === 10) return "Top 10";
-  if (rank === 20) return "Top 20";
-  return null;
+export function boardTierLabel(rank: number): string | null {
+  if (rank < TIER_STEP || rank % TIER_STEP !== 0) return null;
+  return `Top ${rank}`;
 }
 
 export function boardTierAriaLabel(rank: number): string | null {
-  if (rank === 10) return "End of top 10";
-  if (rank === 20) return "End of top 20";
-  return null;
+  if (rank < TIER_STEP || rank % TIER_STEP !== 0) return null;
+  return `End of top ${rank}`;
 }
 
 export function shouldShowTierDivider(rank: number, entryCount: number): boolean {
-  const label = boardTierLabel(rank);
-  if (!label) return false;
+  if (rank < TIER_STEP || rank % TIER_STEP !== 0) return false;
   return entryCount > rank;
 }
 
-export function tierRanks(): readonly number[] {
-  return TIER_RANKS;
+/** Ranks that get a divider when the board is long enough (every 10). */
+export function tierRanks(entryCount: number): number[] {
+  const ranks: number[] = [];
+  for (let rank = TIER_STEP; rank < entryCount; rank += TIER_STEP) {
+    ranks.push(rank);
+  }
+  return ranks;
 }
