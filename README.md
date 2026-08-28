@@ -78,12 +78,19 @@ Deploy runs after successful CI on `main` (or via workflow dispatch):
 - `send_email` binding (`EMAIL`) — configured in `wrangler.jsonc`
 - Email Service domain onboarded for `videoclub.lol`
 - **Browser Rendering** — `browser` binding (`BROWSER`) in `wrangler.jsonc` fetches video pages/APIs through real Chrome when platforms block the Worker IP (LOGIN_REQUIRED, 429, consent walls). Enable Browser Rendering on the account, then deploy; no extra secret.
+- **`DATAFAST_API_KEY`** (required for accurate visitor totals) — website `df_…` key or account `dft_…` token with `analytics:read`. Without it the pill falls back to D1 heartbeats and undercounts vs the DataFast dashboard. Create the key in DataFast → Website settings → Developer, then:
+  ```bash
+  wrangler secret put DATAFAST_API_KEY --env production
+  ```
+  Optional: `DATAFAST_SHARE_URL` for the pill’s “see stats→” link; `DATAFAST_WEBSITE_ID` (already in `wrangler.jsonc`) for `dft_` account tokens.
 - **`PROXY_URL`** (optional secret) — HTTP fetch relay when you run your own proxy. Use a relay base URL such as `https://proxy.example/fetch?url=` (the worker appends `encodeURIComponent(target)`). Classic `https://user:pass@host:port` CONNECT proxies are not supported on Workers; use a relay instead.
 - **`YOUTUBE_API_KEY`** (optional secret) — last-resort YouTube Data API v3 fallback when InnerTube/HTML scraping is blocked. Primary path uses InnerTube (ANDROID/IOS/WEB_EMBEDDED_PLAYER clients) and does not require a key.
 
 Set optional secrets with Wrangler (never commit them):
 
 ```bash
+wrangler secret put DATAFAST_API_KEY --env production
+wrangler secret put DATAFAST_SHARE_URL --env production
 wrangler secret put PROXY_URL --env production
 wrangler secret put YOUTUBE_API_KEY --env production
 ```

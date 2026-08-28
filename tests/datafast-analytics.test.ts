@@ -42,10 +42,11 @@ describe("datafast-analytics", () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it("omits websiteId for website API keys", async () => {
+  it("omits websiteId for website API keys but requests visitors field", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       expect(url).not.toContain("websiteId=");
+      expect(url).toContain("fields=visitors");
       return new Response(
         JSON.stringify({ status: "success", data: [{ visitors: 12 }] }),
         { status: 200 },

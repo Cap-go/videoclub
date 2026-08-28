@@ -6,6 +6,10 @@ export interface VisitorCounts {
   liveVisitorCount: number;
   visitorsSinceLaunch: number;
   statsShareUrl?: string;
+  sources?: {
+    live: "datafast" | "d1";
+    total: "datafast" | "d1";
+  };
 }
 
 async function postVisitors(): Promise<VisitorCounts> {

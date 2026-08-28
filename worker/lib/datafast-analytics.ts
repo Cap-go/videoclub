@@ -12,6 +12,7 @@ interface CacheEntry {
 interface DataFastMetricResponse {
   status?: string;
   data?: Array<{ visitors?: number }>;
+  error?: { code?: number; message?: string };
 }
 
 let overviewCache: CacheEntry | null = null;
@@ -32,6 +33,7 @@ function isAccountToken(apiKey: string): boolean {
 
 function buildAnalyticsUrl(path: "overview" | "realtime", env: Env): string {
   const url = new URL(`${DATAFAST_API_BASE}/${path}`);
+  url.searchParams.set("fields", "visitors");
   const apiKey = env.DATAFAST_API_KEY?.trim();
   if (apiKey && isAccountToken(apiKey)) {
     url.searchParams.set("websiteId", resolveWebsiteId(env));
@@ -42,6 +44,12 @@ function buildAnalyticsUrl(path: "overview" | "realtime", env: Env): string {
 function readCached(entry: CacheEntry | null): number | null {
   if (!entry || entry.expiresAt <= Date.now()) return null;
   return entry.value;
+}
+
+function parseVisitors(body: DataFastMetricResponse): number | null {
+  const visitors = body.data?.[0]?.visitors;
+  if (typeof visitors !== "number" || !Number.isFinite(visitors)) return null;
+  return visitors;
 }
 
 async function fetchMetric(
@@ -59,13 +67,25 @@ async function fetchMetric(
     const response = await fetch(buildAnalyticsUrl(path, env), {
       headers: { Authorization: `Bearer ${apiKey}` },
     });
-    if (!response.ok) return { value: null, cache };
+    const raw = await response.text();
+    let body: DataFastMetricResponse | null = null;
+    try {
+      body = JSON.parse(raw) as DataFastMetricResponse;
+    } catch {
+      console.warn(`[datafast] ${path} non-JSON response status=${response.status}`);
+      return { value: null, cache };
+    }
 
-    const body = (await response.json()) as DataFastMetricResponse;
-    if (body.status !== "success") return { value: null, cache };
+    if (!response.ok || body.status !== "success") {
+      console.warn(
+        `[datafast] ${path} failed status=${response.status} code=${body.error?.code ?? "?"} msg=${body.error?.message ?? body.status ?? "?"}`,
+      );
+      return { value: null, cache };
+    }
 
-    const visitors = body.data?.[0]?.visitors;
-    if (typeof visitors !== "number" || !Number.isFinite(visitors)) {
+    const visitors = parseVisitors(body);
+    if (visitors == null) {
+      console.warn(`[datafast] ${path} missing visitors field`);
       return { value: null, cache };
     }
 
@@ -74,7 +94,8 @@ async function fetchMetric(
       expiresAt: Date.now() + CACHE_TTL_MS,
     };
     return { value: visitors, cache: nextCache };
-  } catch {
+  } catch (err) {
+    console.warn(`[datafast] ${path} fetch error`, err);
     return { value: null, cache };
   }
 }
