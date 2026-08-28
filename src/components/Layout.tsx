@@ -37,6 +37,7 @@ export function Layout() {
                 <button
                   type="button"
                   onClick={() => setPeriod("all")}
+                  aria-pressed={period === "all"}
                   className={`rounded-full px-5 py-1.5 font-medium transition ${
                     period === "all" ? "bg-[#111] text-white" : "text-[#6b7280] hover:text-[#111]"
                   }`}
@@ -46,6 +47,7 @@ export function Layout() {
                 <button
                   type="button"
                   onClick={() => setPeriod("today")}
+                  aria-pressed={period === "today"}
                   className={`rounded-full px-5 py-1.5 font-medium transition ${
                     period === "today" ? "bg-[#111] text-white" : "text-[#6b7280] hover:text-[#111]"
                   }`}
@@ -88,7 +90,7 @@ export function Layout() {
             href="https://x.com/martindonadieu"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-[#f4623a] hover:underline"
+            className="font-medium text-[#c2410c] hover:underline"
           >
             @martindonadieu
           </a>
@@ -97,13 +99,13 @@ export function Layout() {
             href="https://capgo.app"
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-[#f4623a] hover:underline"
+            className="font-medium text-[#c2410c] hover:underline"
           >
             Capgo
           </a>
           .
         </p>
-        <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[#b45309]">
+        <p className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[#c2410c]">
           <Link to="/feed" className="hover:text-[#f4623a] hover:underline">
             Feed
           </Link>
